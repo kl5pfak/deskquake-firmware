@@ -23,7 +23,7 @@
 
 ## Attribution
 
-DeskQuake Firmware is maintained in this repository by KL5PFAK and is based on the Meshtastic firmware project.
+DeskQuake Firmware is maintained in this repository by KL5PFak and is based on the Meshtastic firmware project.
 
 Upstream project:
 [meshtastic/firmware](https://github.com/meshtastic/firmware)
