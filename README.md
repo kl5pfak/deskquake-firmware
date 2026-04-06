@@ -1,4 +1,4 @@
-# DeskQuake for RAK4631
+<h1 align="center">DeskQuake for RAK4631</h1>
 
 <p align="center">
 	<img alt="Platform" src="https://img.shields.io/badge/platform-RAK4631-blue">
