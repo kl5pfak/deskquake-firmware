@@ -24,10 +24,10 @@
 ## DeskQuake Beta Build
 
 Current DeskQuake prerelease for RAK4631:
-[DeskQuake Beta 0.1 for RAK4631](https://github.com/kl5pfak/firmware/releases/tag/deskquake-v0.1-beta1)
+[DeskQuake Beta 0.1 for RAK4631](https://github.com/kl5pfak/deskquake-firmware/releases/tag/deskquake-v0.1-beta1)
 
 Direct firmware download:
-[DeskQuake-Beta-0.1-rak4631.uf2](https://github.com/kl5pfak/firmware/releases/download/deskquake-v0.1-beta1/DeskQuake-Beta-0.1-rak4631.uf2)
+[DeskQuake-Beta-0.1-rak4631.uf2](https://github.com/kl5pfak/deskquake-firmware/releases/download/deskquake-v0.1-beta1/DeskQuake-Beta-0.1-rak4631.uf2)
 
 ## Overview
 
