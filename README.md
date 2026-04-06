@@ -1,4 +1,4 @@
-# DeskQuake Firmware
+# DeskQuake for RAK4631
 
 <p align="center">
 	<img alt="Platform" src="https://img.shields.io/badge/platform-RAK4631-blue">
@@ -8,7 +8,11 @@
 </p>
 
 <p align="center">
-	DeskQuake firmware for RAK4631 with local earthquake monitoring, mesh alerting, serial operator commands, and drag-and-drop UF2 releases.
+	Earthquake-monitoring firmware for RAK4631 with local mesh alerting, operator serial commands, and drag-and-drop UF2 releases.
+</p>
+
+<p align="center">
+	Independently maintained by KL5PFAK and derived from Meshtastic.
 </p>
 
 ---
