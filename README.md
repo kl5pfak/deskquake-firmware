@@ -1,7 +1,7 @@
 <div align="center" markdown="1">
 
 <img src=".github/meshtastic_logo.png" alt="Meshtastic Logo" width="80"/>
-<h1>Meshtastic Firmware</h1>
+<h1>DeskQuake Firmware</h1>
 
 ![GitHub release downloads](https://img.shields.io/github/downloads/meshtastic/firmware/total)
 [![CI](https://img.shields.io/github/actions/workflow/status/meshtastic/firmware/main_matrix.yml?branch=master&label=actions&logo=github&color=yellow)](https://github.com/meshtastic/firmware/actions/workflows/ci.yml)
@@ -21,6 +21,17 @@
 	<a href="https://meshtastic.org/docs/">Documentation</a>
 </div>
 
+## Attribution
+
+DeskQuake Firmware is maintained in this repository by KL5PFAK and is based on the Meshtastic firmware project.
+
+Upstream project:
+[meshtastic/firmware](https://github.com/meshtastic/firmware)
+
+Credit and thanks go to the Meshtastic maintainers and contributors whose work this repository builds on.
+
+This repository continues to distribute the code under the existing GPLv3 terms in [LICENSE](LICENSE).
+
 ## DeskQuake Beta Build
 
 Current DeskQuake prerelease for RAK4631:
@@ -31,9 +42,9 @@ Direct firmware download:
 
 ## Overview
 
-This repository contains the official device firmware for Meshtastic, an open-source LoRa mesh networking project designed for long-range, low-power communication without relying on internet or cellular infrastructure. The firmware supports various hardware platforms, including ESP32, nRF52, RP2040/RP2350, and Linux-based devices.
+This repository contains the DeskQuake firmware branch derived from Meshtastic, an open-source LoRa mesh networking project designed for long-range, low-power communication without relying on internet or cellular infrastructure. The firmware supports various hardware platforms, including ESP32, nRF52, RP2040/RP2350, and Linux-based devices.
 
-Meshtastic enables text messaging, location sharing, and telemetry over a decentralized mesh network, making it ideal for outdoor adventures, emergency preparedness, and remote operations.
+DeskQuake adds earthquake-monitoring behavior on top of the Meshtastic stack while preserving the mesh communication foundation provided by the upstream project.
 
 ### Get Started
 
