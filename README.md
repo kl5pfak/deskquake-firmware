@@ -6,7 +6,6 @@
 	<img alt="Mesh" src="https://img.shields.io/badge/mesh-Meshtastic-green">
 	<img alt="Status" src="https://img.shields.io/badge/status-beta-brightgreen">
 </p>
-<img src="/deskquake-firmware/assets/logo.jpeg" width="200"><p align="center">
 	Earthquake-monitoring firmware for RAK4631 with local mesh alerting, operator serial commands, and drag-and-drop UF2 releases.
 </p>
 
