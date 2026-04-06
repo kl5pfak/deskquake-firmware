@@ -1,58 +1,90 @@
-<div align="center" markdown="1">
+# DeskQuake Firmware
 
-<img src=".github/meshtastic_logo.png" alt="Meshtastic Logo" width="80"/>
-<h1>DeskQuake Firmware</h1>
+<p align="center">
+	<img alt="Platform" src="https://img.shields.io/badge/platform-RAK4631-blue">
+	<img alt="Sensor" src="https://img.shields.io/badge/sensor-RAK12027-orange">
+	<img alt="Mesh" src="https://img.shields.io/badge/mesh-Meshtastic-green">
+	<img alt="Status" src="https://img.shields.io/badge/status-beta-brightgreen">
+</p>
 
-![GitHub release downloads](https://img.shields.io/github/downloads/meshtastic/firmware/total)
-[![CI](https://img.shields.io/github/actions/workflow/status/meshtastic/firmware/main_matrix.yml?branch=master&label=actions&logo=github&color=yellow)](https://github.com/meshtastic/firmware/actions/workflows/ci.yml)
-[![CLA assistant](https://cla-assistant.io/readme/badge/meshtastic/firmware)](https://cla-assistant.io/meshtastic/firmware)
-[![Fiscal Contributors](https://opencollective.com/meshtastic/tiers/badge.svg?label=Fiscal%20Contributors&color=deeppink)](https://opencollective.com/meshtastic/)
-[![Vercel](https://img.shields.io/static/v1?label=Powered%20by&message=Vercel&style=flat&logo=vercel&color=000000)](https://vercel.com?utm_source=meshtastic&utm_campaign=oss)
+<p align="center">
+	DeskQuake firmware for RAK4631 with local earthquake monitoring, mesh alerting, serial operator commands, and drag-and-drop UF2 releases.
+</p>
 
-<a href="https://trendshift.io/repositories/5524" target="_blank"><img src="https://trendshift.io/api/badge/repositories/5524" alt="meshtastic%2Ffirmware | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+---
 
-</div>
+## Download
 
-</div>
+Current prerelease:
+[DeskQuake Beta 0.1 for RAK4631](https://github.com/kl5pfak/deskquake-firmware/releases/tag/deskquake-v0.1-beta1)
 
-<div align="center">
-	<a href="https://meshtastic.org">Website</a>
-	-
-	<a href="https://meshtastic.org/docs/">Documentation</a>
-</div>
+Direct firmware download:
+[DeskQuake-Beta-0.1-rak4631.uf2](https://github.com/kl5pfak/deskquake-firmware/releases/download/deskquake-v0.1-beta1/DeskQuake-Beta-0.1-rak4631.uf2)
+
+---
+
+## Quick Start
+
+1. Put the RAK4631 into UF2 bootloader mode.
+2. Drag [release/DeskQuake-Beta-0.1-rak4631.uf2](release/DeskQuake-Beta-0.1-rak4631.uf2) onto the mounted bootloader volume.
+3. Reconnect to serial at `115200`.
+4. Run `dqcount`, `dqreset`, or `dqdfu` to verify the beta tooling.
+
+---
+
+## What This Repo Adds
+
+- DeskQuake earthquake monitoring behavior on RAK4631
+- Mesh alerts when quake activity is detected
+- Operator serial commands:
+	- `dqcount`
+	- `dqreset`
+	- `dqdfu`
+	- `dqhelp`
+- A helper script for serial commands:
+	- `bin/deskquake-command.sh`
+- A UF2-oriented upload path for more reliable flashing on macOS:
+	- `bin/upload-rak4631-uf2.sh`
+
+---
+
+## Build
+
+Build locally with PlatformIO:
+
+```bash
+pio run -e rak4631
+```
+
+The resulting UF2 is written to:
+
+```text
+.pio/build/rak4631/
+```
+
+An easy-to-find release copy can also be placed in:
+
+```text
+release/DeskQuake-Beta-0.1-rak4631.uf2
+```
+
+---
+
+## Operator Notes
+
+- Close any running serial monitor before using `bin/deskquake-command.sh`.
+- On macOS, prefer `bin/upload-rak4631-uf2.sh` if the standard upload path leaves the board silent.
+- `dqdfu` works only after the board is already running a build that includes that command.
+
+---
 
 ## Attribution
 
-DeskQuake Firmware is maintained in this repository by KL5PFak and is based on the Meshtastic firmware project.
+DeskQuake Firmware is maintained in this repository by KL5PFAK and is derived from the Meshtastic firmware project.
 
 Upstream project:
 [meshtastic/firmware](https://github.com/meshtastic/firmware)
 
 Credit and thanks go to the Meshtastic maintainers and contributors whose work this repository builds on.
 
-This repository continues to distribute the code under the existing GPLv3 terms in [LICENSE](LICENSE).
-
-## DeskQuake Beta Build
-
-Current DeskQuake prerelease for RAK4631:
-[DeskQuake Beta 0.1 for RAK4631](https://github.com/kl5pfak/deskquake-firmware/releases/tag/deskquake-v0.1-beta1)
-
-Direct firmware download:
-[DeskQuake-Beta-0.1-rak4631.uf2](https://github.com/kl5pfak/deskquake-firmware/releases/download/deskquake-v0.1-beta1/DeskQuake-Beta-0.1-rak4631.uf2)
-
-## Overview
-
-This repository contains the DeskQuake firmware branch derived from Meshtastic, an open-source LoRa mesh networking project designed for long-range, low-power communication without relying on internet or cellular infrastructure. The firmware supports various hardware platforms, including ESP32, nRF52, RP2040/RP2350, and Linux-based devices.
-
-DeskQuake adds earthquake-monitoring behavior on top of the Meshtastic stack while preserving the mesh communication foundation provided by the upstream project.
-
-### Get Started
-
-- 🔧 **[Building Instructions](https://meshtastic.org/docs/development/firmware/build)** – Learn how to compile the firmware from source.
-- ⚡ **[Flashing Instructions](https://meshtastic.org/docs/getting-started/flashing-firmware/)** – Install or update the firmware on your device.
-
-Join our community and help improve Meshtastic! 🚀
-
-## Stats
-
-![Alt](https://repobeats.axiom.co/api/embed/8025e56c482ec63541593cc5bd322c19d5c0bdcf.svg "Repobeats analytics image")
+This repository continues to distribute the code under the GPLv3 terms in [LICENSE](LICENSE).
