@@ -52,6 +52,22 @@ Direct firmware download:
 
 ---
 
+## Sensor Hardware
+
+- Target board: RAK4631
+- Sensor module: RAK12027 using the D7S earthquake sensor
+- Sensor bus: I2C on address `0x55`
+- Sensor power control: `WB_IO2` is toggled by the firmware during startup and recovery
+- Current alert channel label in firmware: `KL5PF`
+
+The firmware probes the D7S sensor, waits for it to become ready, tracks SI and PGA values, counts quake events, and resets sensor events after a completed quake.
+
+Sensor reference:
+- Hardware listing: [RAKwireless RAK12027 Earthquake Sensor Omron D7S PID 100106](https://store.rokland.com/products/rakwireless-rak12027-earthquake-sensor-omron-d7s-pid-100106?_pos=1&_psq=Earth&_ss=e&_v=1.0&ref=FairbanksMesh)
+- Official documentation: [RAK12027 Datasheet](https://docs.rakwireless.com/Product-Categories/WisBlock/RAK12027/Datasheet/)
+
+---
+
 ## Build
 
 Build locally with PlatformIO:
@@ -79,6 +95,7 @@ release/DeskQuake-Beta-0.1-rak4631.uf2
 - Close any running serial monitor before using `bin/deskquake-command.sh`.
 - On macOS, prefer `bin/upload-rak4631-uf2.sh` if the standard upload path leaves the board silent.
 - `dqdfu` works only after the board is already running a build that includes that command.
+- The sensor is expected to answer on I2C address `0x55`. If it does not, quake monitoring will not enter the normal runtime state.
 
 ---
 
