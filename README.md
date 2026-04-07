@@ -1,11 +1,11 @@
 <h1 align="center">DeskQuake for RAK4631</h1>
-
 <p align="center">
 	<img alt="Platform" src="https://img.shields.io/badge/platform-RAK4631-blue">
 	<img alt="Sensor" src="https://img.shields.io/badge/sensor-RAK12027-orange">
 	<img alt="Mesh" src="https://img.shields.io/badge/mesh-Meshtastic-green">
 	<img alt="Status" src="https://img.shields.io/badge/status-beta-brightgreen"><p align="center">
-  <img src="Assets/logo.jpeg" width="180" alt="DeskQuake logo">
+</p><p align="center">
+  <img src="Assets/logo.jpeg" width="160" alt="DeskQuake logo">
 </p>
 
 <p align="center">
@@ -13,18 +13,8 @@
 </p>
 
 <p align="center">
-  <img src="Assets/Screen.jpeg" width="420" alt="DeskQuake running"><br>
-  <em>Live mesh quake detection (SI & PGA)</em>
-</p>
-
-<h1 align="center">DeskQuake for RAK4631</h1>
-	
-<p align="center">
-	Earthquake-monitoring firmware for RAK4631 with local mesh alerting, operator serial commands, and drag-and-drop UF2 releases.
-</p>
-
-<p align="center">
-	Independently maintained by KL5PFAK and derived from Meshtastic.
+  <img src="Assets/Screen.jpeg" width="450" alt="DeskQuake running"><br>
+  <em>Live mesh earthquake detection (SI & PGA)</em>
 </p>
 
 ---
