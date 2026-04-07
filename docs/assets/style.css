@@ -1,0 +1,16 @@
+body {
+  background-color: #0b0f14; /* dark clean background */
+  color: #e6edf3; /* better text contrast */
+}
+
+h1, h2, h3 {
+  color: #58a6ff; /* subtle blue accent */
+}
+
+p {
+  color: #c9d1d9;
+}
+
+img {
+  border-radius: 12px;
+}
