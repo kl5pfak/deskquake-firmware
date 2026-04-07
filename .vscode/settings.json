@@ -10,5 +10,8 @@
   },
   "[powershell]": {
     "editor.defaultFormatter": "ms-vscode.powershell"
-  }
+  },
+  "githubPullRequests.ignoredPullRequestBranches": [
+    "deskquake-beta-0.1"
+  ]
 }
