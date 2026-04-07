@@ -1,4 +1,4 @@
-title: DeskQuake for RAK4631
-description: Earthquake-monitoring firmware for RAK4631 with local mesh alerting and drag-and-drop UF2 releases.
+title: DeskQuake
+description: Seismic mesh node for Meshtastic
 theme: jekyll-theme-cayman
 show_downloads: false
