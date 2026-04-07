@@ -30,9 +30,10 @@ DeskQuake turns a RAK4631 + RAK12027 into a distributed seismic detection node.
 It monitors ground motion locally and broadcasts alerts across a Meshtastic network — enabling real-time awareness in remote or off-grid environments.
 
 ## System Flow
-RAK12027 Sensor (D7S)**  
+
+**RAK12027 Sensor (D7S)**  
 ↓  
-**Seismic Data (SI / PGA) 
+**Seismic Data (SI / PGA)**  
 ↓  
 **DeskQuake Detection Logic**  
 ↓  
@@ -44,7 +45,7 @@ RAK12027 Sensor (D7S)**
 ↓  
 **Remote Nodes Receive Alert**
 
-> Built for off-grid environments — where the mesh *is* the infrastructure.
+> Built for off-grid environments — where the mesh is the infrastructure.
 
 ## Download
 
