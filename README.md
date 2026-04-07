@@ -32,7 +32,7 @@ Direct firmware download:
 ## Quick Start
 
 1. Put the RAK4631 into UF2 bootloader mode.
-2. Drag [release/DeskQuake-Beta-0.1-rak4631.uf2](release/DeskQuake-Beta-0.1-rak4631.uf2) onto the mounted bootloader volume.
+2. Drag [DeskQuake-Beta-0.1-rak4631.uf2](https://github.com/kl5pfak/deskquake-firmware/releases/download/deskquake-v0.1-beta1/DeskQuake-Beta-0.1-rak4631.uf2) onto the mounted bootloader volume.
 3. Reconnect to serial at `115200`.
 4. Run `dqcount`, `dqreset`, or `dqdfu` to verify the beta tooling.
 
