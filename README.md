@@ -4,20 +4,40 @@
 	<img alt="Sensor" src="https://img.shields.io/badge/sensor-RAK12027-orange">
 	<img alt="Mesh" src="https://img.shields.io/badge/mesh-Meshtastic-green">
 	<img alt="Status" src="https://img.shields.io/badge/status-beta-brightgreen"><p align="center">
-</p><p align="center">
-  <img src="Assets/logo.jpeg" width="160" alt="DeskQuake logo">
-</p>
-
 <p align="center">
   Earthquake-monitoring firmware for RAK4631 with local mesh alerting, operator serial commands, and drag-and-drop UF2 releases.
 </p>
 
 <p align="center">
+  ⚠️ <strong>Experimental seismic mesh node</strong><br>
+  Built in Alaska. Tested in real-world conditions.
+</p>
+
+<p align="center">
   <img src="Assets/Screen.jpeg" width="450" alt="DeskQuake running"><br>
-  <em>Live mesh earthquake detection (SI & PGA)</em>
+  <em>
+    Live seismic telemetry over Meshtastic — SI & PGA readings with real-time mesh alerting.
+  </em>
 </p>
 
 ---
+## System Flow
+
+**RAK12027 Sensor (D7S)**  
+↓  
+**Seismic Data (SI / PGA)**  
+↓  
+**DeskQuake Detection Logic**  
+↓  
+**Trigger Event**  
+↓  
+**Meshtastic Broadcast**  
+↓  
+**Mesh Network (Multi-hop)**  
+↓  
+**Remote Nodes Receive Alert**
+
+> Built for off-grid environments — where the mesh is the infrastructure.
 
 ## Download
 
