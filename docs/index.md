@@ -2,6 +2,33 @@
 layout: default
 title: DeskQuake
 ---
+<style>
+body,
+.page-content,
+.wrapper,
+.markdown-body {
+  background-color: #0b0f14 !important;
+  color: #e6edf3 !important;
+}
+
+h1, h2, h3 {
+  color: #58a6ff !important;
+}
+
+p {
+  color: #c9d1d9 !important;
+}
+
+img {
+  border-radius: 12px;
+}
+
+/* make content centered + cleaner */
+.page-content {
+  max-width: 900px;
+  margin: auto;
+}
+</style>
 
 <h1 align="center">DeskQuake for RAK4631</h1>
 
