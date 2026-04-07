@@ -32,7 +32,7 @@ It monitors ground motion locally and broadcasts alerts across a Meshtastic netw
 ## System Flow
 RAK12027 Sensor (D7S)**  
 ↓  
-**Seismic Data (SI / PGA)**  
+**Seismic Data (SI / PGA) 
 ↓  
 **DeskQuake Detection Logic**  
 ↓  
