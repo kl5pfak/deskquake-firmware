@@ -1,8 +1,8 @@
----
-title: DeskQuake for RAK4631
----
-
 <h1 align="center">DeskQuake for RAK4631</h1>
+
+<p align="center">
+  <img src="logo.jpeg" width="180" alt="DeskQuake logo">
+</p>
 
 <p align="center">
   <img alt="Platform" src="https://img.shields.io/badge/platform-RAK4631-blue">
@@ -16,10 +16,35 @@ title: DeskQuake for RAK4631
 </p>
 
 <p align="center">
-  Independently maintained by KL5PFAK and derived from Meshtastic.
+  ⚠️ <strong>Experimental seismic mesh node</strong><br>
+  Built in Alaska. Tested in real-world conditions.
 </p>
 
----
+## What It Does
+
+<p align="center">
+  <img src="Screen.jpeg" width="500" alt="DeskQuake telemetry preview">
+</p>
+DeskQuake turns a RAK4631 + RAK12027 into a distributed seismic detection node.
+
+It monitors ground motion locally and broadcasts alerts across a Meshtastic network — enabling real-time awareness in remote or off-grid environments.
+
+## System Flow
+RAK12027 Sensor (D7S)**  
+↓  
+**Seismic Data (SI / PGA)**  
+↓  
+**DeskQuake Detection Logic**  
+↓  
+**Trigger Event**  
+↓  
+**Meshtastic Broadcast**  
+↓  
+**Mesh Network (Multi-hop)**  
+↓  
+**Remote Nodes Receive Alert**
+
+> Built for off-grid environments — where the mesh *is* the infrastructure.
 
 ## Download
 
