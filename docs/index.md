@@ -1,7 +1,12 @@
+---
+layout: default
+title: DeskQuake
+---
+
 <h1 align="center">DeskQuake for RAK4631</h1>
 
 <p align="center">
-  <img src="logo.jpeg" width="180" alt="DeskQuake logo"> 
+  <img src="logo.jpeg" width="180" alt="DeskQuake logo">
 </p>
 
 <p align="center">
