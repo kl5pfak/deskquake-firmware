@@ -2,6 +2,7 @@
 layout: default
 title: DeskQuake
 ---
+
 <style>
 body,
 .page-content,
@@ -23,7 +24,6 @@ img {
   border-radius: 12px;
 }
 
-/* make content centered + cleaner */
 .page-content {
   max-width: 900px;
   margin: auto;
