@@ -3,117 +3,74 @@ layout: default
 title: DeskQuake
 ---
 
-<style>
-body,
-.page-content,
-.wrapper,
-.markdown-body {
-  background-color: #0b0f14 !important;
-  color: #e6edf3 !important;
-}
-
-h1, h2, h3 {
-  color: #58a6ff !important;
-}
-
-p {
-  color: #c9d1d9 !important;
-}
-
-img {
-  border-radius: 12px;
-}
-
-.page-content {
-  max-width: 900px;
-  margin: auto;
-}
-</style>
-
 <h1 align="center">DeskQuake for RAK4631</h1>
 
 <p align="center">
-  <img src="logo.jpeg" width="180" alt="DeskQuake logo">
+  <img src="logo.jpeg" width="250" alt="DeskQuake logo">
 </p>
 
 <p align="center">
-  <img alt="Platform" src="https://img.shields.io/badge/platform-RAK4631-blue">
-  <img alt="Sensor" src="https://img.shields.io/badge/sensor-RAK12027-orange">
-  <img alt="Mesh" src="https://img.shields.io/badge/mesh-Meshtastic-green">
-  <img alt="Status" src="https://img.shields.io/badge/status-beta-brightgreen">
+  <img src="https://img.shields.io/badge/platform-RAK4631-blue">
+  <img src="https://img.shields.io/badge/sensor-RAK12027-orange">
+  <img src="https://img.shields.io/badge/mesh-Meshtastic-green">
+  <img src="https://img.shields.io/badge/status-beta-brightgreen">
 </p>
 
-<p align="center">
-  Earthquake-monitoring firmware for RAK4631 with local mesh alerting, operator serial commands, and drag-and-drop UF2 releases.
-</p>
+DeskQuake is experimental earthquake-monitoring firmware for the RAK4631 paired with the RAK12027 seismic sensor. It watches for local ground motion, evaluates events on-device, and sends alerts across a Meshtastic mesh so nearby nodes can react without internet infrastructure.
 
-<p align="center">
-  ⚠️ <strong>Experimental seismic mesh node</strong><br>
-  Built in Alaska. Tested in real-world conditions.
-</p>
+## Warning
+
+DeskQuake is an experimental field project and must not be treated as a life-safety, emergency-warning, or certified seismic detection system. Use it for testing, situational awareness, and operator evaluation only.
 
 ## What It Does
 
 <p align="center">
-  <img src="Screen.jpeg" width="500" alt="DeskQuake telemetry preview">
+  <img src="Screen.jpeg" width="450" alt="DeskQuake telemetry preview">
 </p>
-DeskQuake turns a RAK4631 + RAK12027 into a distributed seismic detection node.
 
-It monitors ground motion locally and broadcasts alerts across a Meshtastic network — enabling real-time awareness in remote or off-grid environments.
+Each node measures seismic activity locally and decides when readings cross the configured event threshold. When that happens, the device publishes an alert over Meshtastic so other nodes in range, including multi-hop neighbors, can see the event quickly.
+
+This makes the system useful in remote locations where the mesh network itself is the communications backbone.
 
 ## System Flow
 
-**RAK12027 Sensor (D7S)**  
-↓  
-**Seismic Data (SI / PGA)**  
-↓  
-**DeskQuake Detection Logic**  
-↓  
-**Trigger Event**  
-↓  
-**Meshtastic Broadcast**  
-↓  
-**Mesh Network (Multi-hop)**  
-↓  
-**Remote Nodes Receive Alert**
-
-> Built for off-grid environments — where the mesh is the infrastructure.
+1. The RAK12027 D7S sensor captures vibration data.
+2. DeskQuake processes the incoming seismic values.
+3. Detection logic determines whether the reading qualifies as an event.
+4. The node broadcasts an alert over Meshtastic.
+5. Other mesh nodes receive the alert and surface it to operators.
 
 ## Download
 
 Current prerelease:
 [DeskQuake Beta 0.1 for RAK4631](https://github.com/kl5pfak/deskquake-firmware/releases/tag/deskquake-v0.1-beta1)
 
-Direct firmware download:
+Firmware image:
 [DeskQuake-Beta-0.1-rak4631.uf2](https://github.com/kl5pfak/deskquake-firmware/releases/download/deskquake-v0.1-beta1/DeskQuake-Beta-0.1-rak4631.uf2)
 
-Repository:
+Source repository:
 [kl5pfak/deskquake-firmware](https://github.com/kl5pfak/deskquake-firmware)
-
----
 
 ## Quick Start
 
 1. Put the RAK4631 into UF2 bootloader mode.
-2. Drag the UF2 file onto the mounted bootloader volume.
-3. Reconnect to serial at `115200`.
-4. Run `dqcount`, `dqreset`, or `dqdfu` to verify the beta tooling.
+2. Copy the UF2 file to the mounted bootloader volume.
+3. Reconnect over serial at `115200` baud.
+4. Run `dqhelp` to list the available beta commands.
+5. Use `dqcount`, `dqreset`, or `dqdfu` to confirm the tooling is working.
 
----
-
-## Sensor Hardware
+## Hardware
 
 - Target board: RAK4631
-- Sensor module: RAK12027 using the Omron D7S sensor
-- Sensor bus: I2C address `0x55`
+- Sensor module: RAK12027 with the Omron D7S
+- Sensor bus: I2C at address `0x55`
 - Sensor power control: `WB_IO2`
 - Current alert channel label in firmware: `KL5PF`
 
-Sensor reference:
-- [RAKwireless RAK12027 Earthquake Sensor Omron D7S PID 100106](https://store.rokland.com/products/rakwireless-rak12027-earthquake-sensor-omron-d7s-pid-100106?_pos=1&_psq=Earth&_ss=e&_v=1.0&ref=FairbanksMesh)
-- [RAK12027 Datasheet](https://docs.rakwireless.com/Product-Categories/WisBlock/RAK12027/Datasheet/)
+References:
 
----
+- [RAKwireless RAK12027 product page](https://store.rokland.com/products/rakwireless-rak12027-earthquake-sensor-omron-d7s-pid-100106?_pos=1&_psq=Earth&_ss=e&_v=1.0&ref=FairbanksMesh)
+- [RAK12027 datasheet](https://docs.rakwireless.com/Product-Categories/WisBlock/RAK12027/Datasheet/)
 
 ## Operator Commands
 
@@ -122,21 +79,26 @@ Sensor reference:
 - `dqdfu`
 - `dqhelp`
 
-Helper script:
-- `bin/deskquake-command.sh`
+Helper scripts:
 
-Reliable macOS UF2 upload helper:
-- `bin/upload-rak4631-uf2.sh`
-
----
+- [deskquake-command.sh](../bin/deskquake-command.sh)
+- [upload-rak4631-uf2.sh](../bin/upload-rak4631-uf2.sh)
 
 ## Attribution
 
-DeskQuake Firmware is maintained in this repository by KL5PFAK and is derived from the Meshtastic firmware project.
+DeskQuake is maintained by KL5PFAK and builds on the Meshtastic firmware project.
 
 Upstream project:
 [meshtastic/firmware](https://github.com/meshtastic/firmware)
 
-Credit and thanks go to the Meshtastic maintainers and contributors whose work this repository builds on.
+Thanks go to the Meshtastic maintainers and contributors whose work made this fork possible.
 
-This repository continues to distribute the code under the GPLv3 terms in [LICENSE](https://github.com/kl5pfak/deskquake-firmware/blob/deskquake-beta-0.1/LICENSE).
+This repository continues to distribute the code under the GPLv3 terms described in [LICENSE](https://github.com/kl5pfak/deskquake-firmware/blob/deskquake-beta-0.1/LICENSE).
+
+## Project Links
+
+- [Code](https://github.com/kl5pfak/deskquake-firmware)
+- [Issues](https://github.com/kl5pfak/deskquake-firmware/issues)
+- [Pull requests](https://github.com/kl5pfak/deskquake-firmware/pulls)
+- [Actions](https://github.com/kl5pfak/deskquake-firmware/actions)
+- [Security](https://github.com/kl5pfak/deskquake-firmware/security)
