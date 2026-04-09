@@ -11,7 +11,6 @@
 #include "RadioLibInterface.h"
 #include "ReliableRouter.h"
 #include "TransmitHistory.h"
-#include "DeskQuakeConfig.h"
 #include "airtime.h"
 #include "buzz.h"
 #include "power/PowerHAL.h"
@@ -27,14 +26,220 @@
 #include "power.h"
 
 #if !MESHTASTIC_EXCLUDE_I2C
-#include "detect/ScanI2CConsumer.h"
-#include "detect/ScanI2CTwoWire.h"
 #include <Wire.h>
-#if defined(USE_DESKQUAKE)
 #include <RAK12027_D7S.h>
-#include "mesh/generated/meshtastic/portnums.pb.h"
+
+RAK_D7S d7s;
+
+static uint32_t deskquakeLastReadMs = 0;
+static const uint32_t deskquakeReadIntervalMs = 5000;
+
+// keep line 104
+static bool deskquakeRuntimeReadyLogged = false;
+
+static bool deskquakeReady = false;
+static bool deskquakeInitializing = false;
+static bool deskquakeBeginLogged = false;
+
+// new state machine
+enum DeskQuakeState {
+    DQ_OFF = 0,
+    DQ_POWER_LOW,
+    DQ_POWER_WAIT_LOW,
+    DQ_POWER_HIGH,
+    DQ_POWER_WAIT_HIGH,
+    DQ_BEGIN_TRY,
+    DQ_BEGIN_FAILED_WAIT,
+    DQ_WAIT_STABLE_BEFORE_INIT,
+    DQ_INITIALIZE,
+    DQ_WAIT_READY,
+    DQ_RUN
+};
+
+static DeskQuakeState deskquakeState = DQ_OFF;
+static uint32_t deskquakeStateSinceMs = 0;
+static uint32_t deskquakeLastReadyCheckMs = 0;
+
+static const uint32_t deskquakePowerLowMs = 1000;
+static const uint32_t deskquakePowerHighSettleMs = 1000;
+static const uint32_t deskquakeStableBeforeInitMs = 2000;
+static const uint32_t deskquakeReadyPollMs = 500;
+static const uint32_t deskquakeRetryAfterFailMs = 10000;
+
+static void probe_d7s_bus(TwoWire &bus, const char *name)
+{
+    bus.beginTransmission(0x55);
+    uint8_t err = bus.endTransmission();
+    LOG_INFO("D7S raw probe %s err=%u", name, err);
+
+    bus.beginTransmission(0x55);
+    bus.write(0x00);
+    uint8_t errReg0 = bus.endTransmission(false);
+    LOG_INFO("D7S reg0 select %s err=%u", name, errReg0);
+
+    uint8_t n0 = bus.requestFrom(0x55, (uint8_t)1);
+    LOG_INFO("D7S reg0 request %s count=%u", name, n0);
+    if (n0 == 1) {
+        uint8_t v0 = bus.read();
+        LOG_INFO("D7S reg0x00 %s = 0x%02X", name, v0);
+    }
+
+    bus.beginTransmission(0x55);
+    bus.write(0x04);
+    uint8_t errReg4 = bus.endTransmission(false);
+    LOG_INFO("D7S reg4 select %s err=%u", name, errReg4);
+
+    uint8_t n4 = bus.requestFrom(0x55, (uint8_t)1);
+    LOG_INFO("D7S reg4 request %s count=%u", name, n4);
+    if (n4 == 1) {
+        uint8_t v4 = bus.read();
+        LOG_INFO("D7S reg0x04 %s = 0x%02X", name, v4);
+    }
+}
+
+static void deskquakeSetState(DeskQuakeState s)
+{
+    deskquakeState = s;
+    deskquakeStateSinceMs = millis();
+}
+
+static void deskquake_startup()
+{
+    deskquakeReady = false;
+    deskquakeInitializing = false;
+    deskquakeRuntimeReadyLogged = false;
+    deskquakeBeginLogged = false;
+    deskquakeLastReadMs = 0;
+    deskquakeLastReadyCheckMs = 0;
+
+    pinMode(WB_IO2, OUTPUT);
+    deskquakeSetState(DQ_POWER_LOW);
+}
+
+static void deskquake_service()
+{
+    uint32_t now = millis();
+
+    switch (deskquakeState) {
+    case DQ_OFF:
+        deskquake_startup();
+        break;
+
+    case DQ_POWER_LOW:
+        digitalWrite(WB_IO2, LOW);
+        LOG_INFO("DeskQuake power LOW");
+        deskquakeSetState(DQ_POWER_WAIT_LOW);
+        break;
+
+    case DQ_POWER_WAIT_LOW:
+        if (now - deskquakeStateSinceMs >= deskquakePowerLowMs) {
+            deskquakeSetState(DQ_POWER_HIGH);
+        }
+        break;
+
+    case DQ_POWER_HIGH:
+        digitalWrite(WB_IO2, HIGH);
+        LOG_INFO("DeskQuake power HIGH");
+        deskquakeSetState(DQ_POWER_WAIT_HIGH);
+        break;
+
+    case DQ_POWER_WAIT_HIGH:
+        if (now - deskquakeStateSinceMs >= deskquakePowerHighSettleMs) {
+            Wire.begin();
+            Wire.setClock(100000);
+            probe_d7s_bus(Wire, "Wire");
+            deskquakeSetState(DQ_BEGIN_TRY);
+        }
+        break;
+
+    case DQ_BEGIN_TRY:
+        if (!deskquakeBeginLogged) {
+            LOG_INFO("DeskQuake begin try...");
+            deskquakeBeginLogged = true;
+        }
+
+        if (d7s.begin(Wire, 0x55)) {
+            LOG_INFO("DeskQuake begin OK");
+            deskquakeBeginLogged = false;
+            deskquakeSetState(DQ_WAIT_STABLE_BEFORE_INIT);
+        } else {
+            LOG_INFO("DeskQuake begin failed, power-cycling later...");
+            deskquakeBeginLogged = false;
+            deskquakeSetState(DQ_BEGIN_FAILED_WAIT);
+        }
+        break;
+
+    case DQ_BEGIN_FAILED_WAIT:
+        if (now - deskquakeStateSinceMs >= deskquakeRetryAfterFailMs) {
+            deskquakeSetState(DQ_POWER_LOW);
+        }
+        break;
+
+    case DQ_WAIT_STABLE_BEFORE_INIT:
+        if (now - deskquakeStateSinceMs >= deskquakeStableBeforeInitMs) {
+            deskquakeSetState(DQ_INITIALIZE);
+        }
+        break;
+
+    case DQ_INITIALIZE:
+        LOG_INFO("DeskQuake initialize()");
+        d7s.initialize();
+        deskquakeInitializing = true;
+        deskquakeLastReadyCheckMs = 0;
+        deskquakeSetState(DQ_WAIT_READY);
+        break;
+
+    case DQ_WAIT_READY:
+        if (now - deskquakeLastReadyCheckMs < deskquakeReadyPollMs) {
+            break;
+        }
+        deskquakeLastReadyCheckMs = now;
+
+        if (d7s.isReady()) {
+            deskquakeReady = true;
+            deskquakeInitializing = false;
+            LOG_INFO("DeskQuake READY");
+            deskquakeSetState(DQ_RUN);
+        } else {
+            LOG_INFO("DeskQuake warming up...");
+        }
+        break;
+
+    case DQ_RUN:
+        if (now - deskquakeLastReadMs < deskquakeReadIntervalMs) {
+            break;
+        }
+        deskquakeLastReadMs = now;
+
+        {
+            bool ready = d7s.isReady();
+            if (!ready) {
+                LOG_INFO("DeskQuake lost ready, restarting with power cycle");
+                deskquakeReady = false;
+                deskquakeInitializing = false;
+                deskquakeRuntimeReadyLogged = false;
+                deskquakeBeginLogged = false;
+                deskquakeSetState(DQ_POWER_LOW);
+                break;
+            }
+
+            bool eq = d7s.isEarthquakeOccuring();
+            float si = d7s.getInstantaneusSI();
+            float pga = d7s.getInstantaneusPGA();
+
+            if (!deskquakeRuntimeReadyLogged) {
+                LOG_INFO("DeskQuake runtime ready");
+                deskquakeRuntimeReadyLogged = true;
+            }
+
+            LOG_INFO("DeskQuake status: init=%d runtime_ready=%d eq=%d si=%.3f pga=%.3f",
+                     deskquakeReady, ready, eq, si, pga);
+        }
+        break;
+    }
+}
 #endif
-#endif
+
 #include "detect/einkScan.h"
 #include "graphics/Screen.h"
 #include "main.h"
@@ -77,394 +282,6 @@ NRF52Bluetooth *nrf52Bluetooth = nullptr;
 
 #if !MESHTASTIC_EXCLUDE_MQTT
 #include "mqtt/MQTT.h"
-#endif
-
-#if !MESHTASTIC_EXCLUDE_I2C && defined(USE_DESKQUAKE)
-RAK_D7S d7s;
-
-static uint32_t deskquakeLastReadMs = 0;
-static const uint32_t deskquakeReadIntervalMs = 5000;
-static bool deskquakeRuntimeReadyLogged = false;
-static bool deskquakeReady = false;
-static bool deskquakeInitializing = false;
-static bool deskquakeBeginLogged = false;
-static bool deskquakeQuakeAlertSent = false;
-static bool deskquakeWasEq = false;
-static float deskquakePeakPGA = 0.0f;
-static uint32_t deskquakeLastQuakeEndMs = 0;
-static bool deskquakeHadQuake = false;
-static uint8_t deskquakeNotReadyCount = 0;
-static uint32_t deskquakeQuakeCount = 0;
-
-enum DeskQuakeState {
-    DQ_OFF = 0,
-    DQ_POWER_LOW,
-    DQ_POWER_WAIT_LOW,
-    DQ_POWER_HIGH,
-    DQ_POWER_WAIT_HIGH,
-    DQ_BEGIN_TRY,
-    DQ_BEGIN_FAILED_WAIT,
-    DQ_WAIT_STABLE_BEFORE_INIT,
-    DQ_INITIALIZE,
-    DQ_WAIT_READY,
-    DQ_RUN
-};
-
-static DeskQuakeState deskquakeState = DQ_OFF;
-static uint32_t deskquakeStateSinceMs = 0;
-static uint32_t deskquakeLastReadyCheckMs = 0;
-
-static const uint32_t deskquakePowerLowMs = 1000;
-static const uint32_t deskquakePowerHighSettleMs = 1000;
-static const uint32_t deskquakeStableBeforeInitMs = 2000;
-static const uint32_t deskquakeReadyPollMs = 500;
-static const uint32_t deskquakeRetryAfterFailMs = 10000;
-
-static void deskquakeSetState(DeskQuakeState state)
-{
-    deskquakeState = state;
-    deskquakeStateSinceMs = millis();
-}
-
-static void deskquakeFormatElapsed(char *buf, size_t len, uint32_t elapsedMs)
-{
-    uint32_t totalSeconds = elapsedMs / 1000;
-    uint32_t hours = totalSeconds / 3600;
-    uint32_t minutes = (totalSeconds % 3600) / 60;
-    uint32_t seconds = totalSeconds % 60;
-
-    if (hours == 0 && minutes == 0)
-        snprintf(buf, len, "0h00m%02us", seconds);
-    else
-        snprintf(buf, len, "%uh%02um", hours, minutes);
-}
-
-static bool deskquakePingD7S(TwoWire &bus)
-{
-    bus.beginTransmission(0x55);
-    return bus.endTransmission() == 0;
-}
-
-static void deskquakeSendMeshAlert(float si, float pga)
-{
-    if (!service || !router) {
-        LOG_WARN("DeskQuake alert not sent: mesh service unavailable");
-        return;
-    }
-
-    if (deskquakeAlertChannelIndex >= channels.getNumChannels()) {
-        LOG_WARN("DeskQuake alert not sent: channel %u unavailable", deskquakeAlertChannelIndex);
-        return;
-    }
-
-    meshtastic_MeshPacket *packet = router->allocForSending();
-    if (!packet) {
-        LOG_WARN("DeskQuake alert not sent: packet allocation failed");
-        return;
-    }
-
-    packet->channel = deskquakeAlertChannelIndex;
-    packet->want_ack = false;
-    packet->decoded.want_response = false;
-    packet->decoded.portnum = meshtastic_PortNum_TEXT_MESSAGE_APP;
-
-    char message[128];
-    snprintf(message, sizeof(message), "DeskQuake alert on %s: earthquake detected (SI=%.3f PGA=%.3f)",
-             deskquakeAlertChannelLabel, si, pga);
-
-    size_t len = strlen(message);
-    if (len > sizeof(packet->decoded.payload.bytes)) {
-        len = sizeof(packet->decoded.payload.bytes);
-    }
-    packet->decoded.payload.size = len;
-    memcpy(packet->decoded.payload.bytes, message, len);
-
-    LOG_INFO("DeskQuake sending mesh alert on channel %u", deskquakeAlertChannelIndex);
-    service->sendToMesh(packet, RX_SRC_LOCAL, true);
-}
-
-static void probeD7SBus(TwoWire &bus, const char *name)
-{
-    bus.beginTransmission(0x55);
-    uint8_t err = bus.endTransmission();
-    LOG_INFO("D7S raw probe %s err=%u", name, err);
-
-    bus.beginTransmission(0x55);
-    bus.write(0x00);
-    uint8_t errReg0 = bus.endTransmission(false);
-    LOG_INFO("D7S reg0 select %s err=%u", name, errReg0);
-
-    uint8_t n0 = bus.requestFrom(0x55, static_cast<uint8_t>(1));
-    LOG_INFO("D7S reg0 request %s count=%u", name, n0);
-    if (n0 == 1) {
-        uint8_t v0 = bus.read();
-        LOG_INFO("D7S reg0x00 %s = 0x%02X", name, v0);
-    }
-
-    bus.beginTransmission(0x55);
-    bus.write(0x04);
-    uint8_t errReg4 = bus.endTransmission(false);
-    LOG_INFO("D7S reg4 select %s err=%u", name, errReg4);
-
-    uint8_t n4 = bus.requestFrom(0x55, static_cast<uint8_t>(1));
-    LOG_INFO("D7S reg4 request %s count=%u", name, n4);
-    if (n4 == 1) {
-        uint8_t v4 = bus.read();
-        LOG_INFO("D7S reg0x04 %s = 0x%02X", name, v4);
-    }
-}
-
-static void deskquakeResetStats(bool resetSensorEvents)
-{
-    deskquakePeakPGA = 0.0f;
-    deskquakeLastQuakeEndMs = 0;
-    deskquakeHadQuake = false;
-    deskquakeQuakeCount = 0;
-
-    if (resetSensorEvents && deskquakeReady) {
-        d7s.resetEvents();
-    }
-
-    LOG_INFO("DeskQuake stats reset");
-}
-
-static void deskquakeLogStatus(uint32_t now, bool ready, bool eq, float si, float pga)
-{
-    char elapsed[24];
-    if (deskquakeHadQuake) {
-        deskquakeFormatElapsed(elapsed, sizeof(elapsed), now - deskquakeLastQuakeEndMs);
-    } else {
-        snprintf(elapsed, sizeof(elapsed), "none");
-    }
-
-    LOG_INFO("DeskQuake status: ready=%d eq=%d count=%lu si=%.3f pga=%.3f peak=%.3f last=%s", ready, eq,
-             static_cast<unsigned long>(deskquakeQuakeCount), si, pga, deskquakePeakPGA, elapsed);
-}
-
-bool handleDeskQuakeConsoleCommand(const char *command)
-{
-    if (!command || !command[0]) {
-        return false;
-    }
-
-    if (strcmp(command, "dqdfu") == 0) {
-        LOG_INFO("DeskQuake entering DFU mode");
-        enterDfuMode();
-        return true;
-    }
-
-    if (strcmp(command, "dqreset") == 0) {
-        deskquakeResetStats(true);
-        return true;
-    }
-
-    if (strcmp(command, "dqcount") == 0) {
-        deskquakeLogStatus(millis(), d7s.isReady(), d7s.isEarthquakeOccuring(), d7s.getInstantaneusSI(),
-                           d7s.getInstantaneusPGA());
-        return true;
-    }
-
-    if (strcmp(command, "dqtest") == 0) {
-        float si = d7s.isReady() ? d7s.getInstantaneusSI() : 0.0f;
-        float pga = d7s.isReady() ? d7s.getInstantaneusPGA() : 0.0f;
-        LOG_INFO("DeskQuake test alert requested");
-        deskquakeSendMeshAlert(si, pga);
-        return true;
-    }
-
-    if (strcmp(command, "dqhelp") == 0) {
-        LOG_INFO("DeskQuake commands: dqcount, dqreset, dqtest, dqdfu, dqhelp");
-        return true;
-    }
-
-    return false;
-}
-
-static void deskquake_startup()
-{
-    deskquakeReady = false;
-    deskquakeInitializing = false;
-    deskquakeRuntimeReadyLogged = false;
-    deskquakeBeginLogged = false;
-    deskquakeLastReadMs = 0;
-    deskquakeLastReadyCheckMs = 0;
-    deskquakeQuakeAlertSent = false;
-    deskquakeWasEq = false;
-    deskquakeNotReadyCount = 0;
-
-    pinMode(WB_IO2, OUTPUT);
-    deskquakeSetState(DQ_POWER_LOW);
-}
-
-static void deskquake_service()
-{
-    uint32_t now = millis();
-
-    switch (deskquakeState) {
-    case DQ_OFF:
-        deskquake_startup();
-        break;
-
-    case DQ_POWER_LOW:
-        digitalWrite(WB_IO2, LOW);
-        LOG_INFO("DeskQuake power LOW");
-        deskquakeSetState(DQ_POWER_WAIT_LOW);
-        break;
-
-    case DQ_POWER_WAIT_LOW:
-        if (now - deskquakeStateSinceMs >= deskquakePowerLowMs) {
-            deskquakeSetState(DQ_POWER_HIGH);
-        }
-        break;
-
-    case DQ_POWER_HIGH:
-        digitalWrite(WB_IO2, HIGH);
-        LOG_INFO("DeskQuake power HIGH");
-        deskquakeSetState(DQ_POWER_WAIT_HIGH);
-        break;
-
-    case DQ_POWER_WAIT_HIGH:
-        if (now - deskquakeStateSinceMs >= deskquakePowerHighSettleMs) {
-            Wire.begin();
-            Wire.setClock(100000);
-            probeD7SBus(Wire, "Wire");
-            deskquakeSetState(DQ_BEGIN_TRY);
-        }
-        break;
-
-    case DQ_BEGIN_TRY: {
-        if (!deskquakeBeginLogged) {
-            LOG_INFO("DeskQuake begin try");
-            deskquakeBeginLogged = true;
-        }
-
-        bool beginOk = d7s.begin(Wire, 0x55);
-        bool pingOk = deskquakePingD7S(Wire);
-        if (beginOk || pingOk) {
-            LOG_INFO("DeskQuake begin OK");
-            deskquakeBeginLogged = false;
-            deskquakeSetState(DQ_WAIT_STABLE_BEFORE_INIT);
-        } else {
-            LOG_INFO("DeskQuake begin failed, retrying after power cycle");
-            deskquakeBeginLogged = false;
-            deskquakeSetState(DQ_BEGIN_FAILED_WAIT);
-        }
-        break;
-    }
-
-    case DQ_BEGIN_FAILED_WAIT:
-        if (now - deskquakeStateSinceMs >= deskquakeRetryAfterFailMs) {
-            deskquakeSetState(DQ_POWER_LOW);
-        }
-        break;
-
-    case DQ_WAIT_STABLE_BEFORE_INIT:
-        if (now - deskquakeStateSinceMs >= deskquakeStableBeforeInitMs) {
-            deskquakeSetState(DQ_INITIALIZE);
-        }
-        break;
-
-    case DQ_INITIALIZE:
-        LOG_INFO("DeskQuake setAxis(SWITCH_AT_INSTALLATION)");
-        d7s.setAxis(SWITCH_AT_INSTALLATION);
-        delay(2000);
-        LOG_INFO("DeskQuake initialize()");
-        d7s.initialize();
-        deskquakeInitializing = true;
-        deskquakeLastReadyCheckMs = 0;
-        deskquakeSetState(DQ_WAIT_READY);
-        break;
-
-    case DQ_WAIT_READY:
-        if (now - deskquakeLastReadyCheckMs < deskquakeReadyPollMs) {
-            break;
-        }
-        deskquakeLastReadyCheckMs = now;
-
-        if (d7s.isReady()) {
-            deskquakeReady = true;
-            deskquakeInitializing = false;
-            LOG_INFO("DeskQuake READY");
-            deskquakeSetState(DQ_RUN);
-        } else {
-            LOG_INFO("DeskQuake warming up");
-        }
-        break;
-
-    case DQ_RUN:
-        if (now - deskquakeLastReadMs < deskquakeReadIntervalMs) {
-            break;
-        }
-        deskquakeLastReadMs = now;
-
-        {
-            bool ready = d7s.isReady();
-            bool eq = d7s.isEarthquakeOccuring();
-            float si = d7s.getInstantaneusSI();
-            float pga = d7s.getInstantaneusPGA();
-
-            if (!ready && !eq) {
-                deskquakeNotReadyCount++;
-                if (deskquakeNotReadyCount >= 3) {
-                    LOG_INFO("DeskQuake lost ready repeatedly, restarting sensor power cycle");
-                    deskquakeReady = false;
-                    deskquakeInitializing = false;
-                    deskquakeRuntimeReadyLogged = false;
-                    deskquakeBeginLogged = false;
-                    deskquakeNotReadyCount = 0;
-                    deskquakeSetState(DQ_POWER_LOW);
-                } else {
-                    LOG_INFO("DeskQuake not ready (%u/3)", deskquakeNotReadyCount);
-                }
-                break;
-            }
-            deskquakeNotReadyCount = 0;
-
-            if (eq && !deskquakeWasEq) {
-                deskquakePeakPGA = 0.0f;
-                deskquakeQuakeCount++;
-                LOG_INFO("DeskQuake earthquake started");
-                if (!deskquakeQuakeAlertSent) {
-                    deskquakeSendMeshAlert(si, pga);
-                    deskquakeQuakeAlertSent = true;
-                }
-            }
-
-            if (eq && pga > deskquakePeakPGA) {
-                deskquakePeakPGA = pga;
-            }
-
-            if (!eq && deskquakeWasEq) {
-                float finalPga = d7s.getLastestPGA(0);
-                if (finalPga > deskquakePeakPGA) {
-                    deskquakePeakPGA = finalPga;
-                }
-                LOG_INFO("DeskQuake earthquake ended, peak_pga=%.3f latest_pga=%.3f", deskquakePeakPGA, finalPga);
-                d7s.resetEvents();
-                deskquakeLastQuakeEndMs = now;
-                deskquakeHadQuake = true;
-                deskquakeQuakeAlertSent = false;
-                deskquakeRuntimeReadyLogged = false;
-            }
-
-            deskquakeWasEq = eq;
-
-            if (!deskquakeRuntimeReadyLogged && ready) {
-                LOG_INFO("DeskQuake runtime ready");
-                deskquakeRuntimeReadyLogged = true;
-            }
-
-            deskquakeLogStatus(now, ready, eq, si, pga);
-        }
-        break;
-    }
-}
-#else
-bool handleDeskQuakeConsoleCommand(const char *command)
-{
-    (void)command;
-    return false;
-}
 #endif
 
 #ifdef ARCH_PORTDUINO
@@ -1259,8 +1076,6 @@ void setup()
     }
 #endif
 
-#endif
-
     nodeStatus->observe(&nodeDB->newStatus);
 
 #ifdef HAS_I2S
@@ -1289,17 +1104,9 @@ void setup()
 #endif
 #endif
 
-// Now that the mesh service is created, create any modules
-setupModules();
+    // Now that the mesh service is created, create any modules
+    setupModules();
 
-#if !MESHTASTIC_EXCLUDE_I2C
-    // Inform modules about I2C devices
-    ScanI2CCompleted(i2cScanner.get());
-    i2cScanner.reset();
-#if defined(USE_DESKQUAKE)
-    deskquake_startup();
-#endif
-#endif
 
 #if !defined(MESHTASTIC_EXCLUDE_PKI)
     // warn the user about a low entropy key
@@ -1421,8 +1228,9 @@ setupModules();
     // We manually run this to update the NodeStatus
     nodeDB->notifyObservers(true);
 }
-
 #endif
+#endif
+
 uint32_t rebootAtMsec;     // If not zero we will reboot at this time (used to reboot shortly after the update completes)
 uint32_t shutdownAtMsec;   // If not zero we will shutdown at this time (used to shutdown from python or mobile client)
 bool suppressRebootBanner; // If true, suppress "Rebooting..." overlay (used for OTA handoff)
@@ -1519,38 +1327,34 @@ void loop()
 #endif
     power->powerCommandsCheck();
 
-#if !MESHTASTIC_EXCLUDE_I2C && defined(USE_DESKQUAKE)
+#if !MESHTASTIC_EXCLUDE_I2C
     deskquake_service();
 #endif
 
     if (RadioLibInterface::instance != nullptr) {
-        static uint32_t lastRadioMissedIrqPoll;
+        static uint32_t lastRadioMissedIrqPoll = 0;
+        static uint32_t lastAgcReset = 0;
+
+        uint32_t now = millis();
+
         if (!Throttle::isWithinTimespanMs(lastRadioMissedIrqPoll, 1000)) {
-            lastRadioMissedIrqPoll = millis();
+            lastRadioMissedIrqPoll = now;
             RadioLibInterface::instance->pollMissedIrqs();
         }
 
-        // Periodic AGC reset — warm sleep + recalibrate to prevent stuck AGC gain
-        static uint32_t lastAgcReset;
         if (!Throttle::isWithinTimespanMs(lastAgcReset, AGC_RESET_INTERVAL_MS)) {
-            lastAgcReset = millis();
+            lastAgcReset = now;
             RadioLibInterface::instance->resetAGC();
         }
     }
 
-#ifdef DEBUG_STACK
-    static uint32_t lastPrint = 0;
-    if (!Throttle::isWithinTimespanMs(lastPrint, 10 * 1000L)) {
-        lastPrint = millis();
-        meshtastic::printThreadInfo("main");
-    }
-#endif
-
     service->loop();
+
 #if !MESHTASTIC_EXCLUDE_INPUTBROKER && defined(HAS_FREE_RTOS) && !defined(ARCH_RP2040)
     if (inputBroker)
         inputBroker->processInputEventQueue();
 #endif
+
 #if ARCH_PORTDUINO
     if (portduino_config.lora_spi_dev == "ch341" && ch341Hal != nullptr) {
         ch341Hal->checkError();
@@ -1594,12 +1398,13 @@ void loop()
     }
 #endif
 #endif
+
 #if HAS_SCREEN && ENABLE_MESSAGE_PERSISTENCE
     messageStoreAutosaveTick();
 #endif
+
     long delayMsec = mainController.runOrDelay();
 
-    // We want to sleep as long as possible here - because it saves power
     if (!runASAP && loopCanSleep()) {
 #ifdef DEBUG_LOOP_TIMING
         LOG_DEBUG("main loop delay: %d", delayMsec);

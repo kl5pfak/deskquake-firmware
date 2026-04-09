@@ -1,0 +1,3 @@
+# DeskQuake Beta 0.2 Summary
+
+DeskQuake Beta 0.2 for RAK4631 adds private-channel quake alert routing, build-time alert-channel selection, a new `dqtest` operator command, and a more reliable UF2 upload workflow. This beta was validated on hardware with successful flashing, live private-channel alerting, manual shake testing, and removal of the old `quake node state: 0` mesh spam. Verbose `DeskQuake status: ...` serial logging remains intentionally enabled in Beta 0.2 for field testing and troubleshooting.

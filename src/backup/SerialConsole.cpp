@@ -7,6 +7,8 @@
 #include "main.h"
 #include "time.h"
 
+#include <ctype.h>
+
 #if defined(ARDUINO_USB_CDC_ON_BOOT) && ARDUINO_USB_CDC_ON_BOOT
 #define IS_USB_SERIAL
 #ifdef SERIAL_HAS_ON_RECEIVE
@@ -28,21 +30,6 @@
 #define SERIAL_CONNECTION_TIMEOUT (15 * 60) * 1000UL
 
 SerialConsole *console;
-
-namespace {
-bool isDeskQuakeCommandPrefix(const char *command, size_t len)
-{
-    static const char *const kDeskQuakeCommands[] = {"dqcount", "dqreset", "dqtest", "dqdfu", "dqhelp"};
-
-    for (const char *candidate : kDeskQuakeCommands) {
-        if (strncmp(candidate, command, len) == 0) {
-            return true;
-        }
-    }
-
-    return false;
-}
-} // namespace
 
 void consoleInit()
 {
@@ -94,6 +81,68 @@ SerialConsole::SerialConsole() : StreamAPI(&Port), RedirectablePrint(&Port), con
 #endif
 }
 
+bool SerialConsole::processPlaintextCommand()
+{
+    bool consumed = false;
+
+    while (Port.available()) {
+        int next = Port.peek();
+        if (next < 0) {
+            break;
+        }
+
+        bool isPlaintext = next == '\r' || next == '\n' || next == '\t' || (next >= 32 && next <= 126);
+        if (!isPlaintext) {
+            break;
+        }
+
+        consumed = true;
+        char c = static_cast<char>(Port.read());
+        if (c == '\r' || c == '\n') {
+            if (textCommandLen == 0) {
+                continue;
+            }
+
+            textCommandBuf[textCommandLen] = '\0';
+
+            size_t start = 0;
+            while (textCommandBuf[start] && isspace(static_cast<unsigned char>(textCommandBuf[start]))) {
+                start++;
+            }
+
+            size_t end = strlen(textCommandBuf + start);
+            while (end > 0 && isspace(static_cast<unsigned char>(textCommandBuf[start + end - 1]))) {
+                end--;
+            }
+            textCommandBuf[start + end] = '\0';
+
+            for (size_t index = start; textCommandBuf[index]; ++index) {
+                textCommandBuf[index] = static_cast<char>(tolower(static_cast<unsigned char>(textCommandBuf[index])));
+            }
+
+            const char *command = textCommandBuf + start;
+            if (!handleDeskQuakeConsoleCommand(command) && command[0]) {
+                LOG_INFO("Unknown console command: %s", command);
+                LOG_INFO("DeskQuake commands: dqcount, dqreset");
+            }
+
+            textCommandLen = 0;
+            textCommandBuf[0] = '\0';
+            continue;
+        }
+
+        if (textCommandLen + 1 < sizeof(textCommandBuf)) {
+            textCommandBuf[textCommandLen++] = c;
+        } else {
+            textCommandLen = 0;
+            textCommandBuf[0] = '\0';
+            LOG_WARN("Console command too long, discarded");
+        }
+    }
+
+    return consumed;
+}
+
 int32_t SerialConsole::runOnce()
 {
 #ifdef HELTEC_MESH_SOLAR
@@ -103,6 +152,10 @@ int32_t SerialConsole::runOnce()
         return 250;
     }
 #endif
+
+    if (!usingProtobufs) {
+        processPlaintextCommand();
+    }
 
     int32_t delay = runOncePart();
 #if defined(SERIAL_HAS_ON_RECEIVE) || defined(CONFIG_IDF_TARGET_ESP32S2)
@@ -143,10 +196,6 @@ bool SerialConsole::checkIsConnected()
  */
 bool SerialConsole::handleToRadio(const uint8_t *buf, size_t len)
 {
-    if (processPlaintextCommand(buf, len)) {
-        return true;
-    }
-
     // only talk to the API once the configuration has been loaded and we're sure the serial port is not disabled.
     if (config.has_lora && config.security.serial_enabled) {
         // Switch to protobufs for log messages
@@ -157,46 +206,6 @@ bool SerialConsole::handleToRadio(const uint8_t *buf, size_t len)
     } else {
         return false;
     }
-}
-
-bool SerialConsole::processPlaintextCommand(const uint8_t *buf, size_t len)
-{
-    bool sawCandidateText = false;
-
-    for (size_t index = 0; index < len; ++index) {
-        char ch = static_cast<char>(buf[index]);
-
-        if (ch == '\r' || ch == '\n') {
-            if (textCommandLen == 0) {
-                continue;
-            }
-
-            textCommandBuf[textCommandLen] = '\0';
-            textCommandLen = 0;
-            return handleDeskQuakeConsoleCommand(textCommandBuf);
-        }
-
-        if (ch < 0x20 || ch > 0x7e) {
-            textCommandLen = 0;
-            return false;
-        }
-
-        if (textCommandLen >= sizeof(textCommandBuf) - 1) {
-            textCommandLen = 0;
-            return false;
-        }
-
-        textCommandBuf[textCommandLen++] = ch;
-        textCommandBuf[textCommandLen] = '\0';
-        sawCandidateText = true;
-
-        if (!isDeskQuakeCommandPrefix(textCommandBuf, textCommandLen)) {
-            textCommandLen = 0;
-            return false;
-        }
-    }
-
-    return sawCandidateText;
 }
 
 void SerialConsole::log_to_serial(const char *logLevel, const char *format, va_list arg)
