@@ -1,123 +1,57 @@
-<h1 align="center">DeskQuake for RAK4631</h1>
-<p align="center">
-	<img alt="Platform" src="https://img.shields.io/badge/platform-RAK4631-blue">
-	<img alt="Sensor" src="https://img.shields.io/badge/sensor-RAK12027-orange">
-	<img alt="Mesh" src="https://img.shields.io/badge/mesh-Meshtastic-green">
-	<img alt="Status" src="https://img.shields.io/badge/status-beta-brightgreen"><p align="center">
-<p align="center">
-  Earthquake-monitoring firmware for RAK4631 with local mesh alerting, operator serial commands, and drag-and-drop UF2 releases.
-</p>
+<div align="center" markdown="1">
 
-<p align="center">
-  ⚠️ <strong>Experimental seismic mesh node</strong><br>
-  Built in Alaska. Tested in real-world conditions.
-</p>
+<img src=".github/meshtastic_logo.png" alt="Meshtastic Logo" width="80"/>
+<h1>DeskQuake Firmware</h1>
 
-<p align="center">
-  <img src="Assets/Screen.jpeg" width="450" alt="DeskQuake running"><br>
-  <em>
-    Live seismic telemetry over Meshtastic — SI & PGA readings with real-time mesh alerting.
-  </em>
-</p>
+![GitHub release downloads](https://img.shields.io/github/downloads/meshtastic/firmware/total)
+[![CI](https://img.shields.io/github/actions/workflow/status/meshtastic/firmware/main_matrix.yml?branch=master&label=actions&logo=github&color=yellow)](https://github.com/meshtastic/firmware/actions/workflows/ci.yml)
+[![CLA assistant](https://cla-assistant.io/readme/badge/meshtastic/firmware)](https://cla-assistant.io/meshtastic/firmware)
+[![Fiscal Contributors](https://opencollective.com/meshtastic/tiers/badge.svg?label=Fiscal%20Contributors&color=deeppink)](https://opencollective.com/meshtastic/)
+[![Vercel](https://img.shields.io/static/v1?label=Powered%20by&message=Vercel&style=flat&logo=vercel&color=000000)](https://vercel.com?utm_source=meshtastic&utm_campaign=oss)
 
----
-## System Flow 
+<a href="https://trendshift.io/repositories/5524" target="_blank"><img src="https://trendshift.io/api/badge/repositories/5524" alt="meshtastic%2Ffirmware | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 
-**RAK12027 Sensor (D7S)**  
-↓  
-**Seismic Data (SI / PGA)**  
-↓  
-**DeskQuake Detection Logic**  
-↓  
-**Trigger Event**  
-↓  
-**Meshtastic Broadcast**  
-↓  
-**Mesh Network (Multi-hop)**  
-↓  
-**Remote Nodes Receive Alert**
+</div>
 
-> Built for off-grid environments — where the mesh is the infrastructure.
+</div>
 
-## Download
+<div align="center">
+	<a href="https://github.com/kl5pfak/deskquake-firmware">Code</a>
+	-
+	<a href="https://github.com/kl5pfak/deskquake-firmware/releases/tag/deskquake-v0.2-beta2">Beta 0.2 Release</a>
+	-
+	<a href="https://github.com/kl5pfak/deskquake-firmware/blob/deskquake-beta-0.1/docs/index.md">Documentation</a>
+</div>
 
-Current prerelease:
-[DeskQuake Beta 0.1 for RAK4631](https://github.com/kl5pfak/deskquake-firmware/releases/tag/deskquake-v0.1-beta1)
+## Overview
 
-Direct firmware download:
-[DeskQuake-Beta-0.1-rak4631.uf2](https://github.com/kl5pfak/deskquake-firmware/releases/download/deskquake-v0.1-beta1/DeskQuake-Beta-0.1-rak4631.uf2)
+This repository contains the DeskQuake firmware fork built on Meshtastic for the RAK4631 paired with the RAK12027 seismic sensor. It monitors local ground motion, evaluates events on-device, and sends alerts across a Meshtastic mesh without depending on internet or cellular infrastructure.
 
----
+DeskQuake Beta 0.2 is the current published prerelease for field validation on RAK4631 hardware. The validated release asset is `DeskQuake-Beta-0.2-rak4631.uf2` under the `deskquake-v0.2-beta2` prerelease.
 
-## Quick Start
+This fork remains based on Meshtastic firmware and preserves the broader mesh stack while adding DeskQuake-specific sensor handling, operator commands, private-channel alert routing, and UF2 deployment helpers.
 
-1. Put the RAK4631 into UF2 bootloader mode.
-2. Drag [DeskQuake-Beta-0.1-rak4631.uf2](https://github.com/kl5pfak/deskquake-firmware/releases/download/deskquake-v0.1-beta1/DeskQuake-Beta-0.1-rak4631.uf2) onto the mounted bootloader volume.
-3. Reconnect to serial at `115200`.
-4. Run `dqcount`, `dqreset`, or `dqdfu` to verify the beta tooling.
+### Get Started
 
----
+- 🔧 **[Build the firmware](https://github.com/kl5pfak/deskquake-firmware/blob/deskquake-beta-0.1/docs/index.md)** - Review the DeskQuake hardware and operator workflow.
+- ⚡ **[Download Beta 0.2](https://github.com/kl5pfak/deskquake-firmware/releases/tag/deskquake-v0.2-beta2)** - Get the current prerelease UF2 for RAK4631.
+- 🧪 **[Beta release notes](https://github.com/kl5pfak/deskquake-firmware/blob/deskquake-beta-0.1/release/deskquake-beta-0.2-github-release.md)** - See the validated Beta 0.2 behavior and test notes.
 
-## What This Repo Adds
-
-- DeskQuake earthquake monitoring behavior on RAK4631
-- Mesh alerts when quake activity is detected
-- Operator serial commands:
-	- `dqcount`
-	- `dqreset`
-	- `dqdfu`
-	- `dqhelp`
-- A helper script for serial commands:
-	- `bin/deskquake-command.sh`
-- A UF2-oriented upload path for more reliable flashing on macOS:
-	- `bin/upload-rak4631-uf2.sh`
-
----
-
-## Sensor Hardware
+## DeskQuake Highlights
 
 - Target board: RAK4631
-- Sensor module: RAK12027 using the D7S earthquake sensor
-- Sensor bus: I2C on address `0x55`
-- Sensor power control: `WB_IO2` is toggled by the firmware during startup and recovery
-- Current alert channel label in firmware: `KL5PF`
+- Sensor module: RAK12027 with Omron D7S
+- Default DeskQuake alert channel: channel `5` / `KL5PF`
+- Operator commands: `dqcount`, `dqreset`, `dqtest`, `dqdfu`, `dqhelp`
+- Current release: `deskquake-v0.2-beta2` prerelease
 
-The firmware probes the D7S sensor, waits for it to become ready, tracks SI and PGA values, counts quake events, and resets sensor events after a completed quake.
+## Upstream Base
 
-Sensor reference:
-- Hardware listing: [RAKwireless RAK12027 Earthquake Sensor Omron D7S PID 100106](https://store.rokland.com/products/rakwireless-rak12027-earthquake-sensor-omron-d7s-pid-100106?_pos=1&_psq=Earth&_ss=e&_v=1.0&ref=FairbanksMesh)
-- Official documentation: [RAK12027 Datasheet](https://docs.rakwireless.com/Product-Categories/WisBlock/RAK12027/Datasheet/)
+DeskQuake is maintained as a Meshtastic-based fork. Upstream Meshtastic firmware remains at https://github.com/meshtastic/firmware.
 
----
+## Stats
 
-## Build
-
-Build locally with PlatformIO:
-
-```bash
-pio run -e rak4631
-```
-
-The resulting UF2 is written to:
-
-```text
-.pio/build/rak4631/
-```
-
-An easy-to-find release copy can also be placed in:
-
-```text
-release/DeskQuake-Beta-0.1-rak4631.uf2
-```
-
----
-
-## Operator Notes
-
-- Close any running serial monitor before using `bin/deskquake-command.sh`.
-- On macOS, prefer `bin/upload-rak4631-uf2.sh` if the standard upload path leaves the board silent.
-- `dqdfu` works only after the board is already running a build that includes that command.
-- The sensor is expected to answer on I2C address `0x55`. If it does not, quake monitoring will not enter the normal runtime state.
+![Alt](https://repobeats.axiom.co/api/embed/8025e56c482ec63541593cc5bd322c19d5c0bdcf.svg "Repobeats analytics image")
 
 ---
 

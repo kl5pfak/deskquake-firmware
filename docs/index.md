@@ -42,14 +42,17 @@ This makes the system useful in remote locations where the mesh network itself i
 
 ## Download
 
-Planned prerelease for later upload:
-`DeskQuake Beta 0.2 for RAK4631`
+Published prerelease:
+[DeskQuake Beta 0.2 for RAK4631](https://github.com/kl5pfak/deskquake-firmware/releases/tag/deskquake-v0.2-beta2)
 
-Planned release tag:
+Release tag:
 `deskquake-v0.2-beta2`
 
-Planned firmware image name:
-`DeskQuake-Beta-0.2-rak4631.uf2`
+Firmware image:
+[DeskQuake-Beta-0.2-rak4631.uf2](https://github.com/kl5pfak/deskquake-firmware/releases/download/deskquake-v0.2-beta2/DeskQuake-Beta-0.2-rak4631.uf2)
+
+SHA-256:
+`9b933ce829743d4c32718778990e8cd637af63b7f712884ea15b4f7f8eec3b82`
 
 Beta 0.2 note:
 Verbose DeskQuake serial status logging remains enabled intentionally for field validation in this beta build.
