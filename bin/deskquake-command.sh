@@ -18,6 +18,7 @@ only be opened by one process at a time.
 Commands:
   dqcount   Print the current DeskQuake status
   dqreset   Reset DeskQuake count, peak, and last-quake timer
+    dqtest    Send one DeskQuake test alert on the configured mesh channel
     dqdfu     Reboot the node into DFU/UF2 mode
   dqhelp    Print the DeskQuake command list
 
@@ -29,6 +30,7 @@ Options:
 Examples:
   bin/deskquake-command.sh dqcount
   bin/deskquake-command.sh dqreset
+    bin/deskquake-command.sh dqtest
   bin/deskquake-command.sh -p /dev/cu.usbmodem2101 dqhelp
 EOF
 }
@@ -91,7 +93,7 @@ fi
 COMMAND="$1"
 
 case "$COMMAND" in
-    dqcount|dqreset|dqdfu|dqhelp)
+    dqcount|dqreset|dqtest|dqdfu|dqhelp)
         ;;
     *)
         echo "Unsupported DeskQuake command: $COMMAND" >&2

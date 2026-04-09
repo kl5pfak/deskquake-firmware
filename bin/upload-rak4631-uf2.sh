@@ -9,26 +9,29 @@ COMMAND_BAUD=115200
 VOLUME_NAME="RAK4631"
 TIMEOUT_SECS=20
 TOUCH_ATTEMPTS=3
+DRY_RUN=0
 
 show_help() {
 cat <<'EOF'
-Usage: upload-rak4631-uf2.sh [-e ENV] [-p PORT] [-v VOLUME] [-t SECONDS]
+Usage: upload-rak4631-uf2.sh [-e ENV] [-p PORT] [-v VOLUME] [-t SECONDS] [-n]
 
 Build artifact uploader for RAK4631-class boards using the UF2 bootloader volume.
 This avoids the flaky serial DFU handoff that can leave the board silent after
 `pio run -t upload` on some macOS setups.
 
 Options:
-  -e ENV       PlatformIO environment name. Default: rak4631
-  -p PORT      Serial device path used to trigger UF2 bootloader mode
-  -v VOLUME    Bootloader volume name. Default: RAK4631
-  -t SECONDS   Timeout while waiting for bootloader mount/reboot. Default: 20
-  -h           Show this help
+    -e ENV       PlatformIO environment name. Default: rak4631
+    -p PORT      Serial device path used to trigger UF2 bootloader mode
+    -v VOLUME    Bootloader volume name. Default: RAK4631
+    -t SECONDS   Timeout while waiting for bootloader mount/reboot. Default: 20
+    -n           Dry run. Validate inputs and print the planned actions only
+    -h           Show this help
 
 Examples:
-  bin/upload-rak4631-uf2.sh
-  bin/upload-rak4631-uf2.sh -p /dev/cu.usbmodem2101
-  bin/upload-rak4631-uf2.sh -e rak4631
+    bin/upload-rak4631-uf2.sh
+    bin/upload-rak4631-uf2.sh -p /dev/cu.usbmodem2101
+    bin/upload-rak4631-uf2.sh -e rak4631
+    bin/upload-rak4631-uf2.sh -n
 EOF
 }
 
@@ -188,12 +191,13 @@ request_dfu_mode() {
     return 1
 }
 
-while getopts ":e:p:v:t:h" opt; do
+while getopts ":e:p:v:t:nh" opt; do
     case "$opt" in
         e) ENV_NAME="$OPTARG" ;;
         p) PORT="$OPTARG" ;;
         v) VOLUME_NAME="$OPTARG" ;;
         t) TIMEOUT_SECS="$OPTARG" ;;
+        n) DRY_RUN=1 ;;
         h)
             show_help
             exit 0
@@ -219,13 +223,42 @@ fi
 
 if [[ -z "$PORT" ]]; then
     if ! PORT="$(detect_port)"; then
+        if (( DRY_RUN != 0 )); then
+            echo "Dry run: no serial port auto-detected; serial trigger checks will be skipped"
+            PORT=""
+        else
         echo "Could not auto-detect serial port. Use -p PORT." >&2
         exit 1
+        fi
     fi
 fi
 
 echo "Using UF2: $UF2_PATH"
-echo "Using port: $PORT"
+if [[ -n "$PORT" ]]; then
+    echo "Using port: $PORT"
+else
+    echo "Using port: <none>"
+fi
+
+if (( DRY_RUN != 0 )); then
+    echo "Dry run enabled"
+
+    if MOUNTPOINT="$(find_mountpoint "$VOLUME_NAME")"; then
+        echo "Dry run: bootloader volume already mounted at $MOUNTPOINT"
+    else
+        echo "Dry run: bootloader volume '$VOLUME_NAME' is not mounted"
+    fi
+
+    if [[ -n "$PORT" ]]; then
+        echo "Dry run: would request DFU mode with 'dqdfu' on $PORT"
+        echo "Dry run: would fall back to ${BAUD} bps touch if DFU command did not mount '$VOLUME_NAME'"
+    else
+        echo "Dry run: would require either a serial port or a manually mounted '$VOLUME_NAME' volume for live upload"
+    fi
+
+    echo "Dry run: would copy '$UF2_PATH' to the '$VOLUME_NAME' bootloader volume and wait up to ${TIMEOUT_SECS}s for reboot"
+    exit 0
+fi
 
 if ! MOUNTPOINT="$(find_mountpoint "$VOLUME_NAME")"; then
     if ! MOUNTPOINT="$(request_dfu_mode "$PORT" "$VOLUME_NAME" "$TIMEOUT_SECS")"; then

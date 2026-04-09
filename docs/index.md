@@ -42,11 +42,17 @@ This makes the system useful in remote locations where the mesh network itself i
 
 ## Download
 
-Current prerelease:
-[DeskQuake Beta 0.1 for RAK4631](https://github.com/kl5pfak/deskquake-firmware/releases/tag/deskquake-v0.1-beta1)
+Planned prerelease for later upload:
+`DeskQuake Beta 0.2 for RAK4631`
 
-Firmware image:
-[DeskQuake-Beta-0.1-rak4631.uf2](https://github.com/kl5pfak/deskquake-firmware/releases/download/deskquake-v0.1-beta1/DeskQuake-Beta-0.1-rak4631.uf2)
+Planned release tag:
+`deskquake-v0.2-beta2`
+
+Planned firmware image name:
+`DeskQuake-Beta-0.2-rak4631.uf2`
+
+Beta 0.2 note:
+Verbose DeskQuake serial status logging remains enabled intentionally for field validation in this beta build.
 
 Source repository:
 [kl5pfak/deskquake-firmware](https://github.com/kl5pfak/deskquake-firmware)
@@ -57,7 +63,7 @@ Source repository:
 2. Copy the UF2 file to the mounted bootloader volume.
 3. Reconnect over serial at `115200` baud.
 4. Run `dqhelp` to list the available beta commands.
-5. Use `dqcount`, `dqreset`, or `dqdfu` to confirm the tooling is working.
+5. Use `dqcount`, `dqreset`, `dqtest`, or `dqdfu` to confirm the tooling is working.
 
 ## Hardware
 
@@ -65,7 +71,7 @@ Source repository:
 - Sensor module: RAK12027 with the Omron D7S
 - Sensor bus: I2C at address `0x55`
 - Sensor power control: `WB_IO2`
-- Current alert channel label in firmware: `KL5PF`
+- Default DeskQuake alert channel in firmware: channel `5` / `KL5PF`
 
 References:
 
@@ -76,13 +82,29 @@ References:
 
 - `dqcount`
 - `dqreset`
+- `dqtest`
 - `dqdfu`
 - `dqhelp`
 
 Helper scripts:
 
 - [deskquake-command.sh](../bin/deskquake-command.sh)
+- [set-deskquake-alert-channel.py](../bin/set-deskquake-alert-channel.py)
 - [upload-rak4631-uf2.sh](../bin/upload-rak4631-uf2.sh)
+
+Non-destructive upload validation:
+
+- `bin/upload-rak4631-uf2.sh -n`
+
+Build-time alert channel selection:
+
+- `python3 bin/set-deskquake-alert-channel.py`
+- Defaults: channel `5`, label `KL5PF`
+
+Beta 0.2 behavior note:
+
+- Frequent `DeskQuake status: ...` lines on the serial console are expected in this beta.
+- Repeated mesh messages like `quake node state: 0` are not expected and were removed from the RAK4631 DeskQuake build.
 
 ## Attribution
 
@@ -93,7 +115,7 @@ Upstream project:
 
 Thanks go to the Meshtastic maintainers and contributors whose work made this fork possible.
 
-This repository continues to distribute the code under the GPLv3 terms described in [LICENSE](https://github.com/kl5pfak/deskquake-firmware/blob/deskquake-beta-0.1/LICENSE).
+This repository continues to distribute the code under the GPLv3 terms described in [LICENSE](https://github.com/kl5pfak/deskquake-firmware/blob/deskquake-v0.2-beta2/LICENSE).
 
 ## Project Links
 

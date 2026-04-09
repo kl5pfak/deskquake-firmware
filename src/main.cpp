@@ -11,6 +11,7 @@
 #include "RadioLibInterface.h"
 #include "ReliableRouter.h"
 #include "TransmitHistory.h"
+#include "DeskQuakeConfig.h"
 #include "airtime.h"
 #include "buzz.h"
 #include "power/PowerHAL.h"
@@ -26,25 +27,68 @@
 #include "power.h"
 
 #if !MESHTASTIC_EXCLUDE_I2C
+#include "detect/ScanI2CConsumer.h"
+#include "detect/ScanI2CTwoWire.h"
 #include <Wire.h>
+#if defined(USE_DESKQUAKE)
 #include <RAK12027_D7S.h>
 #include "mesh/generated/meshtastic/portnums.pb.h"
+#endif
+#endif
+#include "detect/einkScan.h"
+#include "graphics/Screen.h"
+#include "main.h"
+#include "mesh/generated/meshtastic/config.pb.h"
+#include "meshUtils.h"
+#include "modules/Modules.h"
+#include "sleep.h"
+#include "target_specific.h"
+#include <memory>
+#include <utility>
+#if HAS_SCREEN
+#include "MessageStore.h"
+#endif
 
+#ifdef ARCH_ESP32
+#include "freertosinc.h"
+#if !MESHTASTIC_EXCLUDE_WEBSERVER
+#include "mesh/http/WebServer.h"
+#endif
+#if !MESHTASTIC_EXCLUDE_BLUETOOTH
+#include "nimble/NimbleBluetooth.h"
+NimbleBluetooth *nimbleBluetooth = nullptr;
+#endif
+#endif
+
+#ifdef ARCH_NRF52
+#include "NRF52Bluetooth.h"
+NRF52Bluetooth *nrf52Bluetooth = nullptr;
+#endif
+
+#if HAS_WIFI || defined(USE_WS5500)
+#include "mesh/api/WiFiServerAPI.h"
+#include "mesh/wifi/WiFiAPClient.h"
+#endif
+
+#if HAS_ETHERNET && !defined(USE_WS5500)
+#include "mesh/api/ethServerAPI.h"
+#include "mesh/eth/ethClient.h"
+#endif
+
+#if !MESHTASTIC_EXCLUDE_MQTT
+#include "mqtt/MQTT.h"
+#endif
+
+#if !MESHTASTIC_EXCLUDE_I2C && defined(USE_DESKQUAKE)
 RAK_D7S d7s;
-
-void enterDfuMode();
 
 static uint32_t deskquakeLastReadMs = 0;
 static const uint32_t deskquakeReadIntervalMs = 5000;
-
-// keep line 104
 static bool deskquakeRuntimeReadyLogged = false;
-
 static bool deskquakeReady = false;
 static bool deskquakeInitializing = false;
 static bool deskquakeBeginLogged = false;
 static bool deskquakeQuakeAlertSent = false;
-
 static bool deskquakeWasEq = false;
 static float deskquakePeakPGA = 0.0f;
 static uint32_t deskquakeLastQuakeEndMs = 0;
@@ -52,10 +96,6 @@ static bool deskquakeHadQuake = false;
 static uint8_t deskquakeNotReadyCount = 0;
 static uint32_t deskquakeQuakeCount = 0;
 
-static const ChannelIndex deskquakeAlertChannelIndex = 5;
-static const char *deskquakeAlertChannelLabel = "KL5PF";
-
-// new state machine
 enum DeskQuakeState {
     DQ_OFF = 0,
     DQ_POWER_LOW,
@@ -79,6 +119,12 @@ static const uint32_t deskquakePowerHighSettleMs = 1000;
 static const uint32_t deskquakeStableBeforeInitMs = 2000;
 static const uint32_t deskquakeReadyPollMs = 500;
 static const uint32_t deskquakeRetryAfterFailMs = 10000;
+
+static void deskquakeSetState(DeskQuakeState state)
+{
+    deskquakeState = state;
+    deskquakeStateSinceMs = millis();
+}
 
 static void deskquakeFormatElapsed(char *buf, size_t len, uint32_t elapsedMs)
 {
@@ -111,8 +157,12 @@ static void deskquakeSendMeshAlert(float si, float pga)
         return;
     }
 
-    const char *channelName = channels.getName(deskquakeAlertChannelIndex);
     meshtastic_MeshPacket *packet = router->allocForSending();
+    if (!packet) {
+        LOG_WARN("DeskQuake alert not sent: packet allocation failed");
+        return;
+    }
+
     packet->channel = deskquakeAlertChannelIndex;
     packet->want_ack = false;
     packet->decoded.want_response = false;
@@ -129,12 +179,11 @@ static void deskquakeSendMeshAlert(float si, float pga)
     packet->decoded.payload.size = len;
     memcpy(packet->decoded.payload.bytes, message, len);
 
-    LOG_INFO("DeskQuake sending mesh alert on ch=%u name=%s msg=%.*s", deskquakeAlertChannelIndex,
-             channelName ? channelName : "?", packet->decoded.payload.size, packet->decoded.payload.bytes);
+    LOG_INFO("DeskQuake sending mesh alert on channel %u", deskquakeAlertChannelIndex);
     service->sendToMesh(packet, RX_SRC_LOCAL, true);
 }
 
-static void probe_d7s_bus(TwoWire &bus, const char *name)
+static void probeD7SBus(TwoWire &bus, const char *name)
 {
     bus.beginTransmission(0x55);
     uint8_t err = bus.endTransmission();
@@ -145,7 +194,7 @@ static void probe_d7s_bus(TwoWire &bus, const char *name)
     uint8_t errReg0 = bus.endTransmission(false);
     LOG_INFO("D7S reg0 select %s err=%u", name, errReg0);
 
-    uint8_t n0 = bus.requestFrom(0x55, (uint8_t)1);
+    uint8_t n0 = bus.requestFrom(0x55, static_cast<uint8_t>(1));
     LOG_INFO("D7S reg0 request %s count=%u", name, n0);
     if (n0 == 1) {
         uint8_t v0 = bus.read();
@@ -157,18 +206,12 @@ static void probe_d7s_bus(TwoWire &bus, const char *name)
     uint8_t errReg4 = bus.endTransmission(false);
     LOG_INFO("D7S reg4 select %s err=%u", name, errReg4);
 
-    uint8_t n4 = bus.requestFrom(0x55, (uint8_t)1);
+    uint8_t n4 = bus.requestFrom(0x55, static_cast<uint8_t>(1));
     LOG_INFO("D7S reg4 request %s count=%u", name, n4);
     if (n4 == 1) {
         uint8_t v4 = bus.read();
         LOG_INFO("D7S reg0x04 %s = 0x%02X", name, v4);
     }
-}
-
-static void deskquakeSetState(DeskQuakeState s)
-{
-    deskquakeState = s;
-    deskquakeStateSinceMs = millis();
 }
 
 static void deskquakeResetStats(bool resetSensorEvents)
@@ -194,8 +237,8 @@ static void deskquakeLogStatus(uint32_t now, bool ready, bool eq, float si, floa
         snprintf(elapsed, sizeof(elapsed), "none");
     }
 
-    LOG_INFO("DeskQuake status: init=%d ready=%d eq=%d count=%lu si=%.3f pga=%.3f peak=%.3f last=%s", deskquakeReady,
-             ready, eq, static_cast<unsigned long>(deskquakeQuakeCount), si, pga, deskquakePeakPGA, elapsed);
+    LOG_INFO("DeskQuake status: ready=%d eq=%d count=%lu si=%.3f pga=%.3f peak=%.3f last=%s", ready, eq,
+             static_cast<unsigned long>(deskquakeQuakeCount), si, pga, deskquakePeakPGA, elapsed);
 }
 
 bool handleDeskQuakeConsoleCommand(const char *command)
@@ -216,13 +259,21 @@ bool handleDeskQuakeConsoleCommand(const char *command)
     }
 
     if (strcmp(command, "dqcount") == 0) {
-        uint32_t now = millis();
-        deskquakeLogStatus(now, d7s.isReady(), d7s.isEarthquakeOccuring(), d7s.getInstantaneusSI(), d7s.getInstantaneusPGA());
+        deskquakeLogStatus(millis(), d7s.isReady(), d7s.isEarthquakeOccuring(), d7s.getInstantaneusSI(),
+                           d7s.getInstantaneusPGA());
+        return true;
+    }
+
+    if (strcmp(command, "dqtest") == 0) {
+        float si = d7s.isReady() ? d7s.getInstantaneusSI() : 0.0f;
+        float pga = d7s.isReady() ? d7s.getInstantaneusPGA() : 0.0f;
+        LOG_INFO("DeskQuake test alert requested");
+        deskquakeSendMeshAlert(si, pga);
         return true;
     }
 
     if (strcmp(command, "dqhelp") == 0) {
-        LOG_INFO("DeskQuake commands: dqcount, dqreset, dqdfu");
+        LOG_INFO("DeskQuake commands: dqcount, dqreset, dqtest, dqdfu, dqhelp");
         return true;
     }
 
@@ -276,26 +327,25 @@ static void deskquake_service()
         if (now - deskquakeStateSinceMs >= deskquakePowerHighSettleMs) {
             Wire.begin();
             Wire.setClock(100000);
-            probe_d7s_bus(Wire, "Wire");
+            probeD7SBus(Wire, "Wire");
             deskquakeSetState(DQ_BEGIN_TRY);
         }
         break;
 
     case DQ_BEGIN_TRY: {
         if (!deskquakeBeginLogged) {
-            LOG_INFO("DeskQuake begin try...");
+            LOG_INFO("DeskQuake begin try");
             deskquakeBeginLogged = true;
         }
 
         bool beginOk = d7s.begin(Wire, 0x55);
         bool pingOk = deskquakePingD7S(Wire);
-
         if (beginOk || pingOk) {
             LOG_INFO("DeskQuake begin OK");
             deskquakeBeginLogged = false;
             deskquakeSetState(DQ_WAIT_STABLE_BEFORE_INIT);
         } else {
-            LOG_INFO("DeskQuake begin failed, power-cycling later...");
+            LOG_INFO("DeskQuake begin failed, retrying after power cycle");
             deskquakeBeginLogged = false;
             deskquakeSetState(DQ_BEGIN_FAILED_WAIT);
         }
@@ -337,7 +387,7 @@ static void deskquake_service()
             LOG_INFO("DeskQuake READY");
             deskquakeSetState(DQ_RUN);
         } else {
-            LOG_INFO("DeskQuake warming up...");
+            LOG_INFO("DeskQuake warming up");
         }
         break;
 
@@ -353,12 +403,10 @@ static void deskquake_service()
             float si = d7s.getInstantaneusSI();
             float pga = d7s.getInstantaneusPGA();
 
-            // Require 3 consecutive not-ready/not-eq readings before power-cycling
-            // to avoid restarting on transient I2C glitches.
             if (!ready && !eq) {
                 deskquakeNotReadyCount++;
                 if (deskquakeNotReadyCount >= 3) {
-                    LOG_INFO("DeskQuake lost ready (x3), restarting with power cycle");
+                    LOG_INFO("DeskQuake lost ready repeatedly, restarting sensor power cycle");
                     deskquakeReady = false;
                     deskquakeInitializing = false;
                     deskquakeRuntimeReadyLogged = false;
@@ -366,7 +414,7 @@ static void deskquake_service()
                     deskquakeNotReadyCount = 0;
                     deskquakeSetState(DQ_POWER_LOW);
                 } else {
-                    LOG_INFO("DeskQuake not ready (%d/3), monitoring...", deskquakeNotReadyCount);
+                    LOG_INFO("DeskQuake not ready (%u/3)", deskquakeNotReadyCount);
                 }
                 break;
             }
@@ -375,7 +423,7 @@ static void deskquake_service()
             if (eq && !deskquakeWasEq) {
                 deskquakePeakPGA = 0.0f;
                 deskquakeQuakeCount++;
-                LOG_INFO("DeskQuake earthquake started!");
+                LOG_INFO("DeskQuake earthquake started");
                 if (!deskquakeQuakeAlertSent) {
                     deskquakeSendMeshAlert(si, pga);
                     deskquakeQuakeAlertSent = true;
@@ -391,8 +439,7 @@ static void deskquake_service()
                 if (finalPga > deskquakePeakPGA) {
                     deskquakePeakPGA = finalPga;
                 }
-                LOG_INFO("DeskQuake earthquake ended, peak_pga=%.3f, latest_pga=%.3f, calling resetEvents()",
-                         deskquakePeakPGA, finalPga);
+                LOG_INFO("DeskQuake earthquake ended, peak_pga=%.3f latest_pga=%.3f", deskquakePeakPGA, finalPga);
                 d7s.resetEvents();
                 deskquakeLastQuakeEndMs = now;
                 deskquakeHadQuake = true;
@@ -412,58 +459,12 @@ static void deskquake_service()
         break;
     }
 }
-#endif
-
-#if MESHTASTIC_EXCLUDE_I2C
+#else
 bool handleDeskQuakeConsoleCommand(const char *command)
 {
     (void)command;
     return false;
 }
-#endif
-
-#include "detect/einkScan.h"
-#include "graphics/Screen.h"
-#include "main.h"
-#include "mesh/generated/meshtastic/config.pb.h"
-#include "meshUtils.h"
-#include "modules/Modules.h"
-#include "sleep.h"
-#include "target_specific.h"
-#include <memory>
-#include <utility>
-#if HAS_SCREEN
-#include "MessageStore.h"
-#endif
-
-#ifdef ARCH_ESP32
-#include "freertosinc.h"
-#if !MESHTASTIC_EXCLUDE_WEBSERVER
-#include "mesh/http/WebServer.h"
-#endif
-#if !MESHTASTIC_EXCLUDE_BLUETOOTH
-#include "nimble/NimbleBluetooth.h"
-NimbleBluetooth *nimbleBluetooth = nullptr;
-#endif
-#endif
-
-#ifdef ARCH_NRF52
-#include "NRF52Bluetooth.h"
-NRF52Bluetooth *nrf52Bluetooth = nullptr;
-#endif
-
-#if HAS_WIFI || defined(USE_WS5500)
-#include "mesh/api/WiFiServerAPI.h"
-#include "mesh/wifi/WiFiAPClient.h"
-#endif
-
-#if HAS_ETHERNET && !defined(USE_WS5500)
-#include "mesh/api/ethServerAPI.h"
-#include "mesh/eth/ethClient.h"
-#endif
-
-#if !MESHTASTIC_EXCLUDE_MQTT
-#include "mqtt/MQTT.h"
 #endif
 
 #ifdef ARCH_PORTDUINO
@@ -1258,6 +1259,8 @@ void setup()
     }
 #endif
 
+#endif
+
     nodeStatus->observe(&nodeDB->newStatus);
 
 #ifdef HAS_I2S
@@ -1286,9 +1289,17 @@ void setup()
 #endif
 #endif
 
-    // Now that the mesh service is created, create any modules
-    setupModules();
+// Now that the mesh service is created, create any modules
+setupModules();
 
+#if !MESHTASTIC_EXCLUDE_I2C
+    // Inform modules about I2C devices
+    ScanI2CCompleted(i2cScanner.get());
+    i2cScanner.reset();
+#if defined(USE_DESKQUAKE)
+    deskquake_startup();
+#endif
+#endif
 
 #if !defined(MESHTASTIC_EXCLUDE_PKI)
     // warn the user about a low entropy key
@@ -1410,9 +1421,8 @@ void setup()
     // We manually run this to update the NodeStatus
     nodeDB->notifyObservers(true);
 }
-#endif
-#endif
 
+#endif
 uint32_t rebootAtMsec;     // If not zero we will reboot at this time (used to reboot shortly after the update completes)
 uint32_t shutdownAtMsec;   // If not zero we will shutdown at this time (used to shutdown from python or mobile client)
 bool suppressRebootBanner; // If true, suppress "Rebooting..." overlay (used for OTA handoff)
@@ -1509,34 +1519,38 @@ void loop()
 #endif
     power->powerCommandsCheck();
 
-#if !MESHTASTIC_EXCLUDE_I2C
+#if !MESHTASTIC_EXCLUDE_I2C && defined(USE_DESKQUAKE)
     deskquake_service();
 #endif
 
     if (RadioLibInterface::instance != nullptr) {
-        static uint32_t lastRadioMissedIrqPoll = 0;
-        static uint32_t lastAgcReset = 0;
-
-        uint32_t now = millis();
-
+        static uint32_t lastRadioMissedIrqPoll;
         if (!Throttle::isWithinTimespanMs(lastRadioMissedIrqPoll, 1000)) {
-            lastRadioMissedIrqPoll = now;
+            lastRadioMissedIrqPoll = millis();
             RadioLibInterface::instance->pollMissedIrqs();
         }
 
+        // Periodic AGC reset — warm sleep + recalibrate to prevent stuck AGC gain
+        static uint32_t lastAgcReset;
         if (!Throttle::isWithinTimespanMs(lastAgcReset, AGC_RESET_INTERVAL_MS)) {
-            lastAgcReset = now;
+            lastAgcReset = millis();
             RadioLibInterface::instance->resetAGC();
         }
     }
 
-    service->loop();
+#ifdef DEBUG_STACK
+    static uint32_t lastPrint = 0;
+    if (!Throttle::isWithinTimespanMs(lastPrint, 10 * 1000L)) {
+        lastPrint = millis();
+        meshtastic::printThreadInfo("main");
+    }
+#endif
 
+    service->loop();
 #if !MESHTASTIC_EXCLUDE_INPUTBROKER && defined(HAS_FREE_RTOS) && !defined(ARCH_RP2040)
     if (inputBroker)
         inputBroker->processInputEventQueue();
 #endif
-
 #if ARCH_PORTDUINO
     if (portduino_config.lora_spi_dev == "ch341" && ch341Hal != nullptr) {
         ch341Hal->checkError();
@@ -1580,13 +1594,12 @@ void loop()
     }
 #endif
 #endif
-
 #if HAS_SCREEN && ENABLE_MESSAGE_PERSISTENCE
     messageStoreAutosaveTick();
 #endif
-
     long delayMsec = mainController.runOrDelay();
 
+    // We want to sleep as long as possible here - because it saves power
     if (!runASAP && loopCanSleep()) {
 #ifdef DEBUG_LOOP_TIMING
         LOG_DEBUG("main loop delay: %d", delayMsec);

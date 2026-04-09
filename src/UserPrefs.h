@@ -1,3 +1,5 @@
-// User preferences for DeskQuake firmware
-// Default timezone string for slipstreamTZString usage
+#pragma once
+
+#ifndef USERPREFS_TZ_STRING
 #define USERPREFS_TZ_STRING "GMT0"
+#endif

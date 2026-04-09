@@ -286,7 +286,20 @@ void ScanI2CTwoWire::scanPort(I2CPort port, uint8_t *address, uint8_t asize)
                 break;
 
             case TDECK_KB_ADDR:
+#if defined(USE_DESKQUAKE)
                 break;
+#else
+                // Do we have the T-Deck keyboard or the T-Deck Pro battery sensor?
+                registerValue = getRegisterValue(ScanI2CTwoWire::RegisterLocation(addr, 0x04), 1);
+                if (registerValue != 0) {
+                    logFoundDevice("BQ27220", (uint8_t)addr.address);
+                    type = BQ27220;
+                } else {
+                    logFoundDevice("TDECKKB", (uint8_t)addr.address);
+                    type = TDECKKB;
+                }
+                break;
+#endif
                 SCAN_SIMPLE_CASE(BBQ10_KB_ADDR, BBQ10KB, "BB Q10", (uint8_t)addr.address);
 
                 SCAN_SIMPLE_CASE(ST7567_ADDRESS, SCREEN_ST7567, "ST7567", (uint8_t)addr.address);
@@ -320,11 +333,11 @@ void ScanI2CTwoWire::scanPort(I2CPort port, uint8_t *address, uint8_t asize)
                     type = BME_280;
                     break;
                 case 0x55:
-                #if !defined(USE_DESKQUAKE)
+                    #if !defined(USE_DESKQUAKE)
                     logFoundDevice("BMP085/BMP180", (uint8_t)addr.address);
-                     type = BMP_085;
-                 #endif
-                    break;
+                    type = BMP_085;
+                    #endif
+                     break;
                 case 0x00:
                     // do we have a DPS310 instead?
                     registerValue = getRegisterValue(ScanI2CTwoWire::RegisterLocation(addr, 0x0D), 1);

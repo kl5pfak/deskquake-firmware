@@ -1,4 +1,5 @@
 #include "DetectionSensorModule.h"
+#include "DeskQuakeConfig.h"
 #include "Default.h"
 #include "MeshService.h"
 #include "NodeDB.h"
@@ -45,6 +46,50 @@ const static DetectionSensorTriggerHandler handlers[_meshtastic_ModuleConfig_Det
     [meshtastic_ModuleConfig_DetectionSensorConfig_TriggerType_EITHER_EDGE_ACTIVE_LOW] = detection_trigger_either_edge,
     [meshtastic_ModuleConfig_DetectionSensorConfig_TriggerType_EITHER_EDGE_ACTIVE_HIGH] = detection_trigger_either_edge,
 };
+
+static bool getPrivateChannelIndex(ChannelIndex &channelIndex)
+{
+    if (deskquakeAlertChannelIndex >= channels.getNumChannels()) {
+        LOG_ERROR("Detection sensor channel %u unavailable", deskquakeAlertChannelIndex);
+        return false;
+    }
+
+    const auto &channel = channels.getByIndex(deskquakeAlertChannelIndex);
+    if (!channel.has_settings || channel.role == meshtastic_Channel_Role_DISABLED) {
+        LOG_ERROR("Detection sensor channel %u disabled", deskquakeAlertChannelIndex);
+        return false;
+    }
+
+    if (channels.isDefaultChannel(deskquakeAlertChannelIndex)) {
+        LOG_ERROR("Detection sensor channel %u is still the public default channel", deskquakeAlertChannelIndex);
+        return false;
+    }
+
+    const char *channelName = channels.getName(deskquakeAlertChannelIndex);
+    if (strcmp(channelName, deskquakeAlertChannelLabel) != 0) {
+        LOG_WARN("Detection sensor channel %u name is '%s', expected '%s'", deskquakeAlertChannelIndex, channelName,
+                 deskquakeAlertChannelLabel);
+    }
+
+    channelIndex = deskquakeAlertChannelIndex;
+    return true;
+}
+
+static bool sendPacketOnPrivateChannel(meshtastic_MeshPacket *packet)
+{
+    ChannelIndex channelIndex = 0;
+    if (!getPrivateChannelIndex(channelIndex)) {
+        LOG_ERROR("Detection sensor message requires a non-default channel");
+        service->releaseToPool(packet);
+        return false;
+    }
+
+    packet->channel = channelIndex;
+    LOG_INFO("Send message id=%d, dest=%x, channel=%u (%s), msg=%.*s", packet->id, packet->to, packet->channel,
+             channels.getName(channelIndex), packet->decoded.payload.size, packet->decoded.payload.bytes);
+    service->sendToMesh(packet);
+    return true;
+}
 
 int32_t DetectionSensorModule::runOnce()
 {
@@ -130,12 +175,9 @@ void DetectionSensorModule::sendDetectionMessage()
         p->decoded.payload.bytes[p->decoded.payload.size + 1] = '\0'; // Bell character
         p->decoded.payload.size++;
     }
-    lastSentToMesh = millis();
-    if (!channels.isDefaultChannel(0)) {
-        LOG_INFO("Send message id=%d, dest=%x, msg=%.*s", p->id, p->to, p->decoded.payload.size, p->decoded.payload.bytes);
-        service->sendToMesh(p);
-    } else
-        LOG_ERROR("Message not allow on Public channel");
+    if (sendPacketOnPrivateChannel(p)) {
+        lastSentToMesh = millis();
+    }
     delete[] message;
 }
 
@@ -147,12 +189,9 @@ void DetectionSensorModule::sendCurrentStateMessage(bool state)
     p->want_ack = false;
     p->decoded.payload.size = strlen(message);
     memcpy(p->decoded.payload.bytes, message, p->decoded.payload.size);
-    lastSentToMesh = millis();
-    if (!channels.isDefaultChannel(0)) {
-        LOG_INFO("Send message id=%d, dest=%x, msg=%.*s", p->id, p->to, p->decoded.payload.size, p->decoded.payload.bytes);
-        service->sendToMesh(p);
-    } else
-        LOG_ERROR("Message not allow on Public channel");
+    if (sendPacketOnPrivateChannel(p)) {
+        lastSentToMesh = millis();
+    }
     delete[] message;
 }
 
